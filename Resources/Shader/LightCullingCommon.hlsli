@@ -2,6 +2,8 @@
 // 구조체·cbuffer는 C++(SceneManagement.h, Renderer.h)과 바이트 단위로 같아야 한다.
 #pragma pack_matrix(row_major)
 
+#include "ShadowCommon.hlsli"
+
 #define LIGHT_TYPE_POINT 1
 #define LIGHT_TYPE_SPOT  2
 #define LIGHT_TYPE_RECT  3
@@ -26,7 +28,7 @@ struct FLightRenderParameters
     float BarnDoorCos;     // Rect 전용. 컬링에는 안 쓰지만 stride를 맞추기 위해 둔다
     float BarnDoorSin;
     float BarnDoorLength;
-    float Padding;
+    int mShadowIndex; // 조명 셰이더와 공유하는 그림자 데이터 인덱스. 컬링에는 사용하지 않으며 미할당은 -1이다.
 };
 
 cbuffer FLightCullingConstants : register(b0)

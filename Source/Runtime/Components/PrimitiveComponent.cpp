@@ -49,6 +49,78 @@ void UPrimitiveComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
+void UPrimitiveComponent::PostEditChangeProperty(const FProperty& Property) {
+	Super::PostEditChangeProperty(Property);
+	if (Property.Name == "bVisible" || Property.Name == "mCastShadows" || Property.Name == "mReceiveShadows") {
+		MarkRenderStateDirty();
+	}
+}
+
+const FStaticMeshData* UPrimitiveComponent::GetMeshData() const {
+	return nullptr;
+}
+
+UStaticMesh* UPrimitiveComponent::GetRenderMesh() const {
+	return nullptr;
+}
+
+int32 UPrimitiveComponent::GetNumMaterials() const {
+	return 0;
+}
+
+UMaterial* UPrimitiveComponent::GetMaterial(int32 SlotIndex) const {
+	return nullptr;
+}
+
+void UPrimitiveComponent::SetMaterial(int32 SlotIndex, UMaterial* InMaterial) {
+}
+
+bool UPrimitiveComponent::IsVisible() const {
+	return bVisible;
+}
+
+void UPrimitiveComponent::SetVisible(bool InVisible) {
+	bVisible = InVisible;
+	MarkRenderStateDirty();
+}
+
+bool UPrimitiveComponent::CastsShadows() const {
+	return mCastShadows;
+}
+
+bool UPrimitiveComponent::ReceivesShadows() const {
+	return mReceiveShadows;
+}
+
+void UPrimitiveComponent::SetCastShadows(bool CastShadows) {
+	if (mCastShadows == CastShadows) {
+		return;
+	}
+	mCastShadows = CastShadows;
+	MarkRenderStateDirty();
+}
+
+void UPrimitiveComponent::SetReceiveShadows(bool ReceiveShadows) {
+	if (mReceiveShadows == ReceiveShadows) {
+		return;
+	}
+	mReceiveShadows = ReceiveShadows;
+	MarkRenderStateDirty();
+}
+
+FBox UPrimitiveComponent::CalcLocalBounds() const {
+	const FStaticMeshData* Data{ GetMeshData() };
+	return Data ? Data->AABB : Super::CalcLocalBounds();
+}
+
+FPrimitiveSceneProxy* UPrimitiveComponent::GetSceneProxy() const {
+	return SceneProxy;
+}
+
+bool UPrimitiveComponent::ShouldCreateRenderState() const {
+	return true;
+}
+
 
 void UPrimitiveComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue)
 {

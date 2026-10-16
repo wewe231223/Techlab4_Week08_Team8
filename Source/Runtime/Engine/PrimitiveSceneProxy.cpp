@@ -5,6 +5,70 @@
 #include "Render/Mesh.h"
 #include "Engine/Scene.h"
 
+FPrimitiveSceneProxy::FPrimitiveSceneProxy(UPrimitiveComponent* InComponent)
+    : Component{ InComponent } {
+}
+
+UPrimitiveComponent* FPrimitiveSceneProxy::GetComponent() const {
+    return Component;
+}
+
+const FAABB& FPrimitiveSceneProxy::GetBounds() const {
+    return Bounds;
+}
+
+const FMatrix& FPrimitiveSceneProxy::GetLocalToWorld() const {
+    return LocalToWorld;
+}
+
+const FMatrix& FPrimitiveSceneProxy::GetWorldToLocal() const {
+    return WorldToLocal;
+}
+
+const FLODSphere& FPrimitiveSceneProxy::GetLODSphere() const {
+    return LODSphere;
+}
+
+UStaticMesh* FPrimitiveSceneProxy::GetMesh() const {
+    return Mesh;
+}
+
+bool FPrimitiveSceneProxy::IsVisible() const {
+    return bVisible;
+}
+
+bool FPrimitiveSceneProxy::CastsShadows() const {
+    return mCastShadows;
+}
+
+bool FPrimitiveSceneProxy::ReceivesShadows() const {
+    return mReceiveShadows;
+}
+
+uint8 FPrimitiveSceneProxy::GetLODCount() const {
+    return RenderState ? RenderState->LODCount : 1;
+}
+
+const FMeshRenderState* FPrimitiveSceneProxy::GetRenderState() const {
+    return RenderState.get();
+}
+
+const float* FPrimitiveSceneProxy::GetLODThresholdsSq() const {
+    return RenderState->LODThresholdSq;
+}
+
+const FCachedMeshLOD& FPrimitiveSceneProxy::GetLOD(uint32 Index) const {
+    return RenderState->LODs[Index];
+}
+
+const FCachedMeshSection& FPrimitiveSceneProxy::GetSection(uint32 Index) const {
+    return RenderState->Sections[Index];
+}
+
+FScene* FPrimitiveSceneProxy::GetScene() const {
+    return Scene;
+}
+
 FPrimitiveSceneProxy::~FPrimitiveSceneProxy()
 {
     if (Mesh) Mesh->UnregisterProxy(this);
@@ -40,6 +104,8 @@ void FPrimitiveSceneProxy::UpdateRenderState()
     Mesh = nullptr;
     RenderState.reset();
     bVisible = Component->IsVisible();
+    mCastShadows = Component->CastsShadows();
+    mReceiveShadows = Component->ReceivesShadows();
     UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
     if (StaticMeshComponent) Mesh = StaticMeshComponent->GetStaticMesh();
     if (Mesh != PreviousMesh)

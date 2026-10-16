@@ -1,6 +1,7 @@
 #pragma pack_matrix(row_major)
 
 #include "ColorSpace.hlsli"
+#include "ShadowCommon.hlsli"
 
 #define LIGHT_TYPE_POINT 1   // C++ ELightType과 같아야 함
 #define LIGHT_TYPE_SPOT  2
@@ -36,7 +37,7 @@ struct FDirectionalLightInfo
     float3 Direction; // 빛이 향하는 방향
     float Intensity;
     float3 Color;
-    float Padding;
+    int mShadowIndex; // 방향광의 그림자 데이터 항목 인덱스. -1은 그림자 맵 미할당이다.
 };
 
 // SceneManagement.h의 FLightRenderParameters와 바이트 단위로 같아야 한다.
@@ -57,7 +58,7 @@ struct FLightRenderParameters
     float BarnDoorCos;     // Rect 전용
     float BarnDoorSin;
     float BarnDoorLength;
-    float Padding;
+    int mShadowIndex; // 로컬 조명의 그림자 데이터 항목 인덱스. 텍스처/배열 층 번호와 구분하며 미할당은 -1이다.
 };
 
 

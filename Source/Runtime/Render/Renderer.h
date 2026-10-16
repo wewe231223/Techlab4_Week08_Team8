@@ -9,6 +9,7 @@
 #include "Occlusion/GPUOcclusion.h"
 #include "RenderEnums.h"
 #include "Material.h"
+#include "ShadowMap.h"
 
 constexpr uint32 ObjectSlotBytes = 256;
 
@@ -59,7 +60,7 @@ struct FDirectionalLightInfo
 	FVector Direction;	// 빛이 향하는 방향
 	float Intensity;
 	FVector Color;
-	float Padding;
+	int32 mShadowIndex{ InvalidShadowMapIndex }; // 방향광이 참조할 FShadowMapRenderParameters 항목의 인덱스. 미할당은 -1이다.
 };
 
 struct FPointLightInfo
@@ -106,6 +107,7 @@ static_assert(sizeof(FLightingConstants) == 64);
 
 static_assert(sizeof(FAmbientLightInfo) == 16);
 static_assert(sizeof(FDirectionalLightInfo) == 32);
+static_assert(offsetof(FDirectionalLightInfo, mShadowIndex) == 28);
 static_assert(sizeof(FPointLightInfo) == 48);
 static_assert(sizeof(FSpotLightInfo) == 64);
 static_assert(sizeof(FRectLightInfo) == 80);

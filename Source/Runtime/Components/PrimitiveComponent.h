@@ -20,54 +20,53 @@ enum class EPrimitiveType
 	ParticleQuad
 };
 
-class UPrimitiveComponent :public USceneComponent
-{
+class UPrimitiveComponent : public USceneComponent {
 	DECLARE_CLASS(UPrimitiveComponent, USceneComponent)
 
 	// Material은 여기서 등록하지 않는다. 컴포넌트마다 머티리얼을 다루는 방식이 달라서
 	// (빌보드는 단일 머티리얼, 스태틱 메시는 슬롯별 덮어쓰기) 각자 등록한다.
 	REFLECT_START(ClassName)
 		PROPERTY(bVisible)
+		PROPERTY(mCastShadows)
+		PROPERTY(mReceiveShadows)
 		REFLECT_END()
 public:
 	UPrimitiveComponent();
 	virtual ~UPrimitiveComponent();
 
+public:
 	virtual void BeginPlay() override;
+	virtual void PostEditChangeProperty(const FProperty& Property) override;
 
 	// Todo: subuv
 	//void SubmitToRenderQueue(TQueue<FRenderPacket>& RenderQueue);
 	virtual void SubmitToRenderQueue(FRenderQueue& RenderQueue);
 
-	virtual const FStaticMeshData* GetMeshData() const { return nullptr; }
+	virtual const FStaticMeshData* GetMeshData() const;
 
 	// Outline처럼 컴포넌트를 통째로 한 번 더 그릴 때 쓰는 GPU 메시.
 	// 메시가 없거나(텍스트) View에 따라 형상이 정해지는 컴포넌트(빌보드·파티클)는
 	// 컴포넌트 월드 행렬만으로 같은 그림을 못 만들므로 nullptr을 돌려준다.
-	virtual UStaticMesh* GetRenderMesh() const { return nullptr; }
+	virtual UStaticMesh* GetRenderMesh() const;
 
-	virtual int32 GetNumMaterials() const { return 0; }
-	virtual UMaterial* GetMaterial(int32 SlotIndex) const { return nullptr; }
-	virtual void SetMaterial(int32 SlotIndex, UMaterial* InMaterial) {}
+	virtual int32 GetNumMaterials() const;
+	virtual UMaterial* GetMaterial(int32 SlotIndex) const;
+	virtual void SetMaterial(int32 SlotIndex, UMaterial* InMaterial);
 	//
 	// FShader* GetShader() const { return Shader.get(); };
 
-	bool IsVisible() const { return bVisible; }
-	void SetVisible(bool bInVisible)
-	{
-		bVisible = bInVisible;
-		MarkRenderStateDirty();
-	}
+	bool IsVisible() const;
+	void SetVisible(bool InVisible);
+	bool CastsShadows() const;
+	bool ReceivesShadows() const;
+	void SetCastShadows(bool CastShadows);
+	void SetReceiveShadows(bool ReceiveShadows);
 
 	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit);
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& OutT);
-	virtual FBox CalcLocalBounds() const override
-	{
-		const FStaticMeshData* Data = GetMeshData();
-		return Data ? Data->AABB : Super::CalcLocalBounds();
-	}
+	virtual FBox CalcLocalBounds() const override;
 
-	FPrimitiveSceneProxy* GetSceneProxy() const { return SceneProxy; }
+	FPrimitiveSceneProxy* GetSceneProxy() const;
 
 	void MarkRenderStateDirty();
 
@@ -76,10 +75,7 @@ public:
 	virtual bool MoveComponent(const FVector& Delta, const FRotator& NewRotation, bool bSweep, FHitResult* Hit = nullptr) override;
 
 protected:
-	virtual bool ShouldCreateRenderState() const override
-	{
-		return true;
-	}
+	virtual bool ShouldCreateRenderState() const override;
 
 	virtual void CreateRenderState() override;
 	virtual void DestroyRenderState() override;
@@ -92,4 +88,6 @@ protected:
 private:
 	friend class FScene;
 	FPrimitiveSceneProxy* SceneProxy = nullptr;
+	bool mCastShadows{ true }; // 이 물체를 그림자 맵의 깊이 기록 대상으로 사용할지 여부.
+	bool mReceiveShadows{ true }; // 이 물체의 조명 계산에 다른 물체와 자신의 그림자 판정을 적용할지 여부.
 };
