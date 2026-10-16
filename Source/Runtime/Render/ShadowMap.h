@@ -25,11 +25,13 @@ struct FLightShadowSettings {
 
 // 그림자 맵 생성 후 GPU에 전달할 데이터. ShadowCommon.hlsli의 구조체와 필드 순서 및 크기를 맞춘다.
 struct alignas(16) FShadowMapRenderParameters {
-	// 행 벡터 규약으로 월드 위치에 오른쪽에서 곱해 광원 클립 공간으로 변환한다.
+	// 광원 클립 공간으로 변환한다.
+	FMatrix mLightViewProjection{ FMatrix::Identity };
 	// 0~1 그림자 UV를 아틀라스 영역으로 변환한다. XY는 크기, ZW는 오프셋이며 UV * XY + ZW로 적용한다. 기본값은 전체 영역이다.
 	FVector4 mUvScaleBias{ 1.0f, 1.0f, 0.0f, 0.0f };
 	// 최종 샘플링 텍스처의 { 1 / Width, 1 / Height }. PCF의 이웃 샘플 간격이며 아틀라스 사용 시 전체 아틀라스 해상도를 기준으로 한다.
 	FVector2 mTexelSize{};
+
 	float mDepthBias{}; // 이 그림자 맵의 깊이 비교에 적용할 고정 보정량.
 	float mNormalBias{}; // 이 그림자 맵의 판정 위치에 적용할 법선 방향 보정량.
 	int32 mTextureIndex{ InvalidShadowMapIndex }; // 렌더러가 관리하는 그림자 텍스처 리소스의 인덱스. 미할당은 -1이다.
