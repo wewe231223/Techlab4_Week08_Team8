@@ -7,6 +7,7 @@
 #include "RenderingInfo.h"
 #include "ViewMode.h"
 #include "Occlusion/GPUOcclusion.h"
+#include "ShadowDepthRenderer.h"
 #include "RenderEnums.h"
 #include "Material.h"
 
@@ -47,6 +48,13 @@ constexpr uint32 ClusteredSlices = 32;
 constexpr uint32 MaxLightsPerCell = 32;
 constexpr uint32 CellStride = MaxLightsPerCell + 1;
 
+struct FShadowConstants
+{
+	//여기에 그림자에 필요한 상수 값들을 추가
+	FMatrix DirectionalLightViewProjection;
+};
+
+
 // UberLit.hlsl의 cbuffer Lighting과 바이트 단위로 같아야 한다. 모든 구조체를 16바이트 배수로 맞춘다.
 struct FAmbientLightInfo
 {
@@ -59,7 +67,7 @@ struct FDirectionalLightInfo
 	FVector Direction;	// 빛이 향하는 방향
 	float Intensity;
 	FVector Color;
-	float Padding;
+	uint32 bHasShadow;
 };
 
 struct FPointLightInfo
@@ -119,6 +127,7 @@ struct FSortEntry
 };
 
 class UCameraComponent;
+class FPrimitiveSceneProxy;
 
 // 오클루전 컬링의 효과 상한을 재기 위한 측정 결과 (디버그 전용)
 struct FOcclusionMeasureResult
@@ -182,6 +191,9 @@ class FRenderer
 {
 public:
 	bool Init();
+	// 셰이더가 있어야 만들 수 있는 하위 렌더러(ShadowDepth)를 초기화한다. FRenderResourceManager::Init 뒤에 부른다.
+	// 실패해도 해당 패스만 건너뛰고 나머지 렌더링은 된다.
+	void InitShaderDependents();
 
 	// 기존 단일 카메라의 ViewProjection으로 렌더 큐 전체를 그린다.
 	void RenderAll(FRenderQueue& InQueue, UCameraComponent* CameraComponent);
@@ -206,6 +218,11 @@ public:
 	// 큐를 Material, Opaque, Mesh에 따라 정렬한다
 	// CameraWorldPos는 ViewProjection과 함께 b0에 올라가 Specular 계산(V 벡터)에 쓰인다.
 	void RenderQueueSorting(FRenderQueue& InQueue, const FMatrix& ViewProjection, const FVector& CameraWorldPos);
+
+	// Shadow Depth Pass: 불투명만 PS 없이 그려 라이트 시점의 깊이 버퍼를 채운다
+	void RenderShadowDepth(FTexture2D* ShadowMap, const FMatrix& ViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters);
+
+	void TEMP_SetDirectionalShadow(FTexture2D* ShadowMap, const FMatrix& LightViewProjection);
 
 	// Depth Prepass: 불투명만 PS 없이 그려 깊이 버퍼를 채운다. RenderQueueSorting 뒤, RenderOpaque 전에 부른다.
 	// 같은 VS·행렬이라 깊이가 비트 단위로 같으므로 본 패스는 LESS_EQUAL로 통과한다.
@@ -290,6 +307,13 @@ private:
 	TUniquePtr<FStructuredBuffer> TileIndexBuffer{};
 	TUniquePtr<FStructuredBuffer> LocalLightBuffer{};
 	uint32 NumLocalLightsThisFrame = 0;
+
+	// Shadow Depth Pass. InitShaderDependents에서 만들고, 실패하면 nullptr로 두어 그림자만 건너뛴다.
+	TUniquePtr<FShadowDepthRenderer> ShadowDepthRenderer{};
+	TUniquePtr<FConstantBuffer> ShadowCB;
+
+	// 소유는 라이트 프록시. Directional 그림자를 그리지 않은 프레임에는 nullptr이라 메인 패스가 바인딩을 건너뛴다.
+	FTexture2D *DIrectionalShadowMap = nullptr;
 
 	EViewMode CurrentViewMode = EViewMode::Lit_Lambert;
 };

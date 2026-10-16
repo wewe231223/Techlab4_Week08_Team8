@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/LightComponent.h"
+#include "Render/Texture2D.h"
 
 #include "SceneManagement.h"
 
@@ -27,6 +28,12 @@ public:
 	const ULightComponent* GetLightComponent() const { return LightComponent; }
 	bool IsVisible() const { return LightComponent->IsVisible(); }
 
+	// 이 라이트가 쓰는 섀도우맵 장수
+	// 인덱스는 ULightComponent::GetShadowViewPorjection(index)와 짝이다.
+	virtual int32 GetNumShadowMaps() const { return 0; }
+	int32 GetNumAllocatedShadowMaps() const { return ShadowMaps.Num(); }
+	FTexture2D* GetShadowMap(int32 Index) const { return ShadowMaps[Index].get(); }
+
 protected:
 	const ULightComponent* LightComponent = nullptr;
 
@@ -34,6 +41,9 @@ private:
 	friend class FScene;
 	FScene* Scene = nullptr;
     int32 PackedIndex = INDEX_NONE;
+
+	TArray<TUniquePtr<FTexture2D>> ShadowMaps;
+	uint32 ShadowMapResolution = 1024;
 };
 
 

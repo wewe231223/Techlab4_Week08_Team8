@@ -40,6 +40,7 @@ UMaterial* UMaterial::CreateInstance(const UMaterial* Source)
 	Instance->BaseColor = Source->BaseColor;
 	Instance->UVScrollSpeed = Source->UVScrollSpeed;
 	Instance->Shininess = Source->Shininess;
+	Instance->AlphaCutOff = Source->AlphaCutOff;
 
 	// ParamBuffer는 TUniquePtr라 복사할 수 없다.
 	// 원본이 갖고 있으면 같은 크기로 새로 만들어 준다. 내용은 매 프레임 갱신되므로 옮기지 않는다.
@@ -83,6 +84,7 @@ json UMaterial::SaveMaterial(const UMaterial* Material)
 	Out["Base"] = Base ? Base->GetPath() : FString("DefaultMaterial");
 	Out["BaseColor"] = Material->BaseColor;
 	Out["Shininess"] = Material->Shininess;
+	Out["AlphaCutOff"] = Material->AlphaCutOff;
 	Out["UVScrollSpeed"] = {
 		Material->UVScrollSpeed.X,
 		Material->UVScrollSpeed.Y
@@ -135,6 +137,11 @@ UMaterial* UMaterial::LoadMaterial(const json& In)
 	if (In.contains("Shininess"))
 	{
 		In["Shininess"].get_to(Instance->Shininess);
+	}
+
+	if (In.contains("AlphaCutOff"))
+	{
+		In["AlphaCutOff"].get_to(Instance->AlphaCutOff);
 	}
 
 	if (In.contains("Textures"))

@@ -23,7 +23,8 @@ struct FLightRenderParameters
 	float BarnDoorCos;
 	float BarnDoorSin;
 	float BarnDoorLength;
-	float Padding;
+	// -1이면 그림자 없음. 0 이상이면 섀도우 데이터(행렬·섀도우맵) 배열의 칸 번호. FScene::UpdateLights가 채운다.
+	int32 ShadowIndex = -1;
 };
 
 static_assert(sizeof(FLightRenderParameters) == 96,"sizeof(UberLit / TileBasedLightCulling) == sizeof(FLightRenderParameters)");

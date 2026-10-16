@@ -110,3 +110,10 @@ void USpotLightComponent::DrawDebug(FLineBatcher* LineBatcher) const
 
 	AddWireCone(LineBatcher, Apex, Forward, Right, Up, SafeInnerAngle, SafeRadius, InnerColor);
 }
+
+// TODO: 라이트 방향 LookAt + FOV = OuterConeAngle * 2 원근 투영. 지금은 항등 행렬
+// FMatrix()는 0 행렬이라 절두체 평면을 뽑을 때 assert가 걸린다. 반드시 Identity를 쓴다.
+FMatrix USpotLightComponent::GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index) const
+{
+	return FMatrix::Identity;
+}

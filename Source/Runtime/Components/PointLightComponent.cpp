@@ -49,3 +49,10 @@ void UPointLightComponent::DrawDebug(FLineBatcher* LineBatcher) const
     AddWireSphere(LineBatcher, Center, FVector(0,1,0), FVector(0,0,1), Radius);
     AddWireSphere(LineBatcher, Center, FVector(1,0,0), FVector(0,1,0), Radius);
 }
+
+// TODO: 6면 LookAt(FOV 90, 종횡비 1) 원근 투영. 지금은 항등 행렬
+// FMatrix()는 0 행렬이라 절두체 평면을 뽑을 때 assert가 걸린다. 반드시 Identity를 쓴다.
+FMatrix UPointLightComponent::GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index) const
+{
+	return FMatrix::Identity;
+}

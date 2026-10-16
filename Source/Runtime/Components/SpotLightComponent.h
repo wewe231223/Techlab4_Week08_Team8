@@ -21,6 +21,7 @@ public:
 
 	void DrawDebug(FLineBatcher* LineBatcher) const override;
 	ELightType GetLightType() const override { return ELightType::Spot; }
+	FMatrix GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index = 0) const override;
 
 	float GetInnerConeAngle() const { return InnerConeAngle; }
 	void SetInnerConeAngle(float InAngle) { InnerConeAngle = InAngle; }

@@ -14,6 +14,7 @@ public:
 	virtual class FLightSceneProxy* CreateSceneProxy() const override;
 
 	ELightType GetLightType() const override { return ELightType::Directional; }
+	FMatrix GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index = 0) const override;
 
 
 private:

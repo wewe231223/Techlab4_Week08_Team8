@@ -9,6 +9,9 @@
 UTextRenderComponent::UTextRenderComponent()
 {
 	Font = UAssetManager::GetAssetByPath<UFont>("Fonts/CookieRun.json");
+
+	bCastShadow = false;
+	bReciveShadow = false;
 }
 
 UTextRenderComponent::~UTextRenderComponent()

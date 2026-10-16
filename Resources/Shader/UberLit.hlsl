@@ -36,7 +36,7 @@ struct FDirectionalLightInfo
     float3 Direction; // 빛이 향하는 방향
     float Intensity;
     float3 Color;
-    float Padding;
+    uint bHasShadow;
 };
 
 // SceneManagement.h의 FLightRenderParameters와 바이트 단위로 같아야 한다.
@@ -57,7 +57,7 @@ struct FLightRenderParameters
     float BarnDoorCos;     // Rect 전용
     float BarnDoorSin;
     float BarnDoorLength;
-    float Padding;
+    int ShadowIndex;       // -1이면 그림자 없음
 };
 
 
@@ -76,6 +76,8 @@ cbuffer MaterialParams : register(b1)
     float2 UVOffset;
     float bOpaque;
     float Shininess; // Blinn-Phong 광택 지수 (Material.h FStaticMeshMaterialParams::Shininess)
+    float AlphaCutOff;
+    float3 MaterialPadding;
 };
 
 // Renderer.h의 FPerObjectConstants와 바이트 단위로 같아야 한다.
@@ -111,12 +113,21 @@ cbuffer LightGrid : register(b5)
     uint2 LightGridPadding;
 };
 
+cbuffer ShadowConstants : register(b6)
+{
+    matrix DirectionalViewProjection;
+}
+
 StructuredBuffer<FLightRenderParameters> LocalLights : register(t10);
 // 셀마다 [개수][라이트 번호 x MAX_LIGHTS_PER_CELL] 형태로 CELL_STRIDE칸씩 이어져 있다.
 StructuredBuffer<uint> CellLightIndices : register(t12);
 
 Texture2D DiffuseTexture : register(t0);
 Texture2D NormalTexture : register(t1);
+
+//TODO : t2에 Directional ShadowMap 바인딩 예정
+Texture2D DirectionalShadowMapTexture : register(t20);
+SamplerComparisonState ShadowMapSampler : register(s1);
 SamplerState MaterialSampler : register(s0);
 
 struct VS_INPUT
@@ -193,10 +204,30 @@ float3 GetAmbientLighting()
     return Ambient.Color * Ambient.Intensity;
 }
 
-// Directional Light의 영향을 구한다
-FLightContribution CalcDirectionalLight(float3 N, float3 V, float InShininess)
+float CalcDirectionalShadow(float3 WorldPos)
 {
-    const float3 Radiance = Directional.Color * Directional.Intensity;
+    if (Directional.bHasShadow == 0)
+        return 1.0f;
+    
+    const float4 LightClip = mul(float4(WorldPos, 1.f), DirectionalViewProjection);
+    const float3 NDC = LightClip.xyz / LightClip.w;
+    
+    //NDC : -1 ~ +1, y가 위쪽
+    //UV : 0 ~ +1, y가 아래쪽
+    const float2 ShadowUV = float2(NDC.x * 0.5f + 0.5f, -NDC.y * 0.5f + 0.5f);
+    
+     // 섀도우맵 범위 밖은 그림자 없음 (Far 너머 포함)
+    if (any(ShadowUV < 0.f) || any(ShadowUV > 1.0f) || NDC.z > 1.0f)
+        return 1.0f;
+    
+    // 비교 샘플러(LESS_EQUAL): 내 깊이 <= 기록된 깊이면 1(빛 받음), 아니면 0. 하드웨어가 2x2 PCF로 섞어 준다
+    return DirectionalShadowMapTexture.SampleCmpLevelZero(ShadowMapSampler, ShadowUV, NDC.z);
+}
+
+// Directional Light의 영향을 구한다
+FLightContribution CalcDirectionalLight(float3 N, float3 V, float3 WorldPos, float InShininess)
+{
+    const float3 Radiance = Directional.Color * Directional.Intensity * CalcDirectionalShadow(WorldPos);
     return SurfaceShading(N, -Directional.Direction, V, Radiance, InShininess);
 }
 
@@ -312,7 +343,7 @@ float3 GetHeatmapColor(uint LightCount)
 FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid)
 {
     // Directional Light는 처음에 한 번만 계산
-    FLightContribution Total = CalcDirectionalLight(N, V, InShininess);
+    FLightContribution Total = CalcDirectionalLight(N, V, WorldPos, InShininess);
 
     uint LightCount = NumLocalLights;
     uint CellOffset = 0;
@@ -368,6 +399,9 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
     const float2 UV = Input.UV + UVOffset;
     const float4 TexColor = DiffuseTexture.Sample(MaterialSampler, UV);
     float4 Albedo = TexColor * BaseColor;
+    
+    //TODO : Alpha값이 AlphaCutoff보다 작으면 버리기
+    
 #if !defined(EDITOR_ARROW_SHADER)
     // 씬은 HDR 타깃에 선형으로 쌓이므로 sRGB로 인코딩된 디퓨즈 텍스처와 BaseColor를 각각 선형으로 바꾼다.
     // 에디터 화살표는 톤 매핑 이후 LDR 타깃에 그려지므로 sRGB 그대로 둔다.

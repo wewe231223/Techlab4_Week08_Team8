@@ -76,6 +76,7 @@ bool FRenderer::Init()
 	PerObjectCB = RenderCommand::CreateConstantBuffer(sizeof(FPerObjectConstants));
 	ViewCB = RenderCommand::CreateConstantBuffer(sizeof(FViewConstants));
 	// FireBallLightCB = RenderCommand::CreateConstantBuffer(sizeof(FFireBallLightConstants));
+	ShadowCB = RenderCommand::CreateConstantBuffer(sizeof(FShadowConstants));
 	LightingCB = RenderCommand::CreateConstantBuffer(sizeof(FLightingConstants));
 	LightCullingCB = RenderCommand::CreateConstantBuffer(sizeof(FLightCullingConstants));
 	GridLightingCB = RenderCommand::CreateConstantBuffer(sizeof(FLightGridConstants));
@@ -89,6 +90,13 @@ bool FRenderer::Init()
 	GPUOcclusion.Init();   // 실패해도 오클루전만 못 쓸 뿐 렌더링은 된다
 
 	return true;
+}
+
+void FRenderer::InitShaderDependents()
+{
+	ShadowDepthRenderer = MakeUnique<FShadowDepthRenderer>();
+	if (!ShadowDepthRenderer->Init())
+		ShadowDepthRenderer.reset();   // 그림자만 못 그릴 뿐 렌더링은 된다
 }
 
 // 필요한 칸 수가 용량을 넘을 때만 두 배씩 키워 재할당을 드물게 한다.
@@ -164,6 +172,15 @@ void FRenderer::RenderAll(FRenderQueue& InQueue, const FMatrix& ViewProjection, 
 
 void FRenderer::RenderOpaque(const FMatrix& ViewProjection)
 {
+	//Shadow
+	if (DIrectionalShadowMap)
+	{
+		RenderCommand::BindShaderResource(20, DIrectionalShadowMap, EShaderBindFlagBits::Pixel);
+	}
+	RenderCommand::BindConstantBuffer(6, ShadowCB.get(), EShaderBindFlagBits::Pixel);
+	RenderCommand::BindSamplerState(1, ESamplerState::ShadowCompare, EShaderBindFlagBits::Pixel);
+
+
 	RenderCommand::BindConstantBuffer(4, LightingCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(10, LocalLightBuffer.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(12, TileIndexBuffer.get(), EShaderBindFlagBits::Pixel);
@@ -284,6 +301,24 @@ void FRenderer::RenderDepth(const FMatrix& ViewProjection)
 	// 본 패스가 머티리얼을 처음부터 다시 바인딩해 PS가 돌아오게 한다.
 	LastMesh = nullptr;
 	LastMaterial = nullptr;
+}
+
+void FRenderer::RenderShadowDepth(FTexture2D* ShadowMap, const FMatrix& ViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters)
+{
+	if (!ShadowDepthRenderer) return;
+
+	ShadowDepthRenderer->OnRender(ShadowMap, ViewProjection, ShadowCasters);
+
+	// 섀도우 패스가 셰이더·메시를 직접 바인딩했으므로 본 패스가 처음부터 다시 바인딩하게 한다.
+	LastMesh = nullptr;
+	LastMaterial = nullptr;
+}
+
+void FRenderer::TEMP_SetDirectionalShadow(FTexture2D* ShadowMap, const FMatrix& LightViewProjection)
+{
+	DIrectionalShadowMap = ShadowMap;
+	FShadowConstants Constants = { LightViewProjection };
+	RenderCommand::UpdateBufferData(ShadowCB.get(), &Constants, sizeof(FShadowConstants));
 }
 
 // 정렬된 패킷 중 [Begin, End) 범위를 View 행렬과 Section 범위로 그린다.
@@ -548,6 +583,7 @@ void FRenderer::UpdateMaterialParams(const FRenderPacket& RenderPacket)
 		Params.UVOffset = RenderPacket.Material->UVScrollSpeed * TotalTime;
 		Params.bOpaque = RenderPacket.Material->BlendState == EBlendState::Opaque ? 1.0f : 0.0f;
 		Params.Shininess = RenderPacket.Material->Shininess;
+		Params.AlphaCutOff = RenderPacket.Material->AlphaCutOff;
 
 		RenderCommand::UpdateBufferData(RenderPacket.Material->ParamBuffer.get(), &Params, sizeof(FStaticMeshMaterialParams));
 		RenderCommand::BindConstantBuffer(1, RenderPacket.Material->ParamBuffer.get(), EShaderBindFlagBits::Pixel);

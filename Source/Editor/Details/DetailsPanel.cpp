@@ -12,6 +12,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/RectLightComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Engine/LightSceneProxy.h"
 
 #include "Components/RotatingMovementComponent.h"
 #include "Components/ProjectileMovementComponent.h"
@@ -412,6 +413,57 @@ namespace
 		ImGui::PopID();
 	}
 
+	// 라이트 프록시가 가진 섀도우맵을 그대로 보여준다 (디버그용).
+	// R24 깊이 SRV라 빨간 채널에만 값이 들어가고, 가까울수록 어둡고 아무것도 없으면(1.0) 빨갛게 보인다.
+	void DrawShadowMaps(const ULightComponent* LightComponent)
+	{
+		const FLightSceneProxy* Proxy = LightComponent->SceneProxy;
+		const int32 NumShadowMaps = Proxy ? Proxy->GetNumAllocatedShadowMaps() : 0;
+
+		if (!ImGui::CollapsingHeader("Shadow Map", ImGuiTreeNodeFlags_DefaultOpen))
+			return;
+
+		if (NumShadowMaps <= 0)
+		{
+			ImGui::TextDisabled("No shadow map (Cast Shadows off, unsupported light, or not rendered yet)");
+			return;
+		}
+
+		// 한 장이면 크게, Point처럼 여러 장이면 면마다 작게 줄지어 그린다.
+		static const char* const CubeFaceNames[]{ "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+		const float Available = ImGui::GetContentRegionAvail().x;
+		const float Size = NumShadowMaps == 1 ? std::min(512.0f, Available) : std::min(160.0f, Available);
+		const float Spacing = ImGui::GetStyle().ItemSpacing.x;
+		float LineWidth = 0.0f;
+
+		for (int32 Index = 0; Index < NumShadowMaps; ++Index)
+		{
+			FTexture2D* ShadowMap = Proxy->GetShadowMap(Index);
+			if (!ShadowMap || !ShadowMap->GetSRV()) continue;
+
+			ImGui::BeginGroup();
+			if (NumShadowMaps == 6)
+				ImGui::TextUnformatted(CubeFaceNames[Index]);
+			ImGui::Image((ImTextureID)ShadowMap->GetSRV(), { Size, Size });
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%u x %u", ShadowMap->GetWidth(), ShadowMap->GetHeight());
+			ImGui::EndGroup();
+
+			// 다음 칸이 들어갈 자리가 있으면 같은 줄에 붙이고, 없으면 줄을 바꾼다.
+			LineWidth += Size;
+			const bool bLast = Index + 1 == NumShadowMaps;
+			if (!bLast && LineWidth + Spacing + Size <= Available)
+			{
+				ImGui::SameLine();
+				LineWidth += Spacing;
+			}
+			else
+			{
+				LineWidth = 0.0f;
+			}
+		}
+	}
+
 	// 메시 컴포넌트의 머티리얼 슬롯을 한 줄씩 그린다.
 	// 텍스처를 드롭하면 그 슬롯의 덮어쓰기에 반영하고, 메시 에셋의 머티리얼은 건드리지 않는다.
 	void DrawMaterialSlots(UMeshComponent* MeshComponent)
@@ -581,6 +633,28 @@ namespace
 						}
 						ImGui::EndCombo();
 					}
+
+					ImGui::TableNextRow();
+
+					// 7: AlphaCutOff
+					ImGui::TableSetColumnIndex(0);
+					ImGui::Text("AlphaCutOff");
+
+					ImGui::TableSetColumnIndex(1);
+					ImGui::SetNextItemWidth(-1.0f);
+
+					float TempAlphaCutOff = Effective ? Effective->AlphaCutOff : 32.0f;
+					if (ImGui::DragFloat("##AlphaCutOff", &TempAlphaCutOff, 0.5f, 1.0f, 256.0f))
+					{
+						Override = EnsureMaterialOverride(MeshComponent, Slot, Effective, Override);
+						if (Override)
+						{
+							Override->AlphaCutOff = TempAlphaCutOff;
+							Effective = Override;
+						}
+					}
+
+					ImGui::TableNextRow();
 
 					ImGui::EndTable();
 				}
@@ -898,6 +972,10 @@ void FDetailsPanel::OnRender()
 			if (UMeshComponent* MeshComponent = Cast<UMeshComponent>(TargetComponent))
 			{
 				DrawMaterialSlots(MeshComponent);
+			}
+			if (const ULightComponent* LightComponent = Cast<ULightComponent>(TargetComponent))
+			{
+				DrawShadowMaps(LightComponent);
 			}
 			ImGui::PopID();
 

@@ -5,6 +5,7 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/RectLightComponent.h"
+#include "Render/RenderCommand.h"
 
 void FScene::AddPrimitive(UPrimitiveComponent* Component)
 {
@@ -174,69 +175,133 @@ void FScene::UpdateLights(FRenderer* Renderer)
 		Constants.Directional.Direction = P.Direction;
 		Constants.Directional.Color = P.Color;
 		Constants.Directional.Intensity = P.Intensity;
+		Constants.Directional.bHasShadow = ShouldRenderShadow(Proxy) ? 1u : 0u;
 		break;                                            // 셰이더는 하나만 받음
 	}
 
+	// 그림자를 그리는 Local 라이트에만 앞에서부터 칸 번호를 매긴다. RenderShadowDepth가 같은 순서로 돈다.
+	int32 NextShadowIndex = 0;
 	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
 	{
 		FLightRenderParameters& P = LocalLightParameters[Proxy->PackedIndex];
 		Proxy->GetLightShaderParameters(P);
 		if (!Proxy->IsVisible())
 			P.Radius = 0.0f;                              // 칸은 유지하고 영향만 없앤다
-			/*FTransform Transform;
-			Transform.Rotation = Spot->GetWorldRotation();
-			const FLinearColor Color(Spot->GetLightColor());
-
-			Constants.SpotLights[Constants.NumSpotLights].Color = FVector(Color.R, Color.G, Color.B);
-			Constants.SpotLights[Constants.NumSpotLights].Direction = Transform.GetForward();
-			Constants.SpotLights[Constants.NumSpotLights].FalloffExponent = Spot->GetFalloff();
-			Constants.SpotLights[Constants.NumSpotLights].Intensity = Spot->GetIntensity();
-			Constants.SpotLights[Constants.NumSpotLights].Position = Spot->GetWorldLocation();
-			Constants.SpotLights[Constants.NumSpotLights].Radius = Spot->GetAttenuationRadius();
-			const float SafeOuterAngle = FMath::Clamp(Spot->GetOuterConeAngle(), 0.0f, 89.0f);
-			const float SafeInnerAngle = FMath::Clamp(Spot->GetInnerConeAngle(), 0.0f, SafeOuterAngle);
-			Constants.SpotLights[Constants.NumSpotLights].InnerConeCos = std::cos(FMath::DegreesToRadians(SafeInnerAngle));
-			Constants.SpotLights[Constants.NumSpotLights].OuterConeCos = std::cos(FMath::DegreesToRadians(SafeOuterAngle));
-			Constants.NumSpotLights++;
-		}
-		else if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
-		{
-			const FLinearColor Color(Point->GetLightColor());
-			FPointLightInfo Info{};
-			Info.Position = Point->GetWorldLocation();
-			Info.Radius = Point->GetAttenuationRadius();
-			Info.Color = FVector(Color.R, Color.G, Color.B);
-			Info.Intensity = Point->GetIntensity();
-			Info.FalloffExponent = Point->GetFalloff();
-			PointLights.Add(Info);
-		}
-		else if (URectLightComponent* Rect = Cast<URectLightComponent>(Light))
-		{
-			if (Constants.NumRectLights >= MaxRectLights)
-				continue;
-
-			FTransform Transform;
-			Transform.Rotation = Rect->GetWorldRotation();
-			const FLinearColor Color(Rect->GetLightColor());
-
-			FRectLightInfo& Info = Constants.RectLights[Constants.NumRectLights++];
-			Info.Position   = Rect->GetWorldLocation();
-			Info.Radius     = Rect->GetAttenuationRadius();
-			Info.Color      = FVector(Color.R, Color.G, Color.B);
-			Info.Intensity  = Rect->GetIntensity();
-			Info.Direction  = Transform.GetForward();
-			Info.Right      = Transform.GetRight();
-			Info.HalfWidth  = Rect->GetWidth() * 0.5f;
-			Info.HalfHeight = Rect->GetHeight() * 0.5f;
-
-			const float AngleRad = FMath::DegreesToRadians(FMath::Clamp(Rect->GetBarnDoorAngle(), 0.0f, 90.0f));
-			Info.BarnDoorCos    = std::cos(AngleRad);
-			Info.BarnDoorSin    = std::sin(AngleRad);
-			Info.BarnDoorLength = std::max(Rect->GetBarnDoorLength(), 0.0f);
-		}*/
+		P.ShadowIndex = ShouldRenderShadow(Proxy) ? NextShadowIndex++ : -1;
 	}
 
 	Renderer->SetLighting(Constants, LocalLightParameters);
+}
+
+namespace
+{
+	constexpr uint32 DefaultShadowMapResolution = 1024;
+
+	// DSV로 깊이를 쓰고 메인 패스에서 SRV로 읽어야 해서 TYPELESS로 만든다.
+	// FTexture2D::CreateViews가 TYPELESS 깊이로 처리하는 포맷이 R24G8뿐이라 그에 맞춘다.
+	TUniquePtr<FTexture2D> CreateShadowMap(uint32 Resolution)
+	{
+		D3D11_TEXTURE2D_DESC Desc{};
+		Desc.Width = Resolution;
+		Desc.Height = Resolution;
+		Desc.MipLevels = 1;
+		Desc.ArraySize = 1;
+		Desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+		Desc.SampleDesc.Count = 1;
+		Desc.Usage = D3D11_USAGE_DEFAULT;
+		Desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+		return RenderCommand::CreateTexture2D(Desc);
+	}
+}
+
+void FScene::RenderShadowDepth(FRenderer* Renderer)
+{
+	if (!Renderer) return;
+
+	// 셰이더가 Directional을 하나만 받으므로 UpdateLights와 같은 규칙으로 첫 번째 보이는 것만 그린다.
+	for (FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies)
+	{
+		if (!Proxy->IsVisible()) continue;
+		if (ShouldRenderShadow(Proxy))
+			RenderLightShadowDepth(Renderer, Proxy);
+		break;
+	}
+
+	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
+	{
+		if (ShouldRenderShadow(Proxy))
+			RenderLightShadowDepth(Renderer, Proxy);
+	}
+}
+
+bool FScene::ShouldRenderShadow(const FLightSceneProxy* Proxy) const
+{
+	if (!Proxy->IsVisible()) return false;
+	if (!Proxy->GetLightComponent()->IsCastShadows()) return false;
+	if (Proxy->GetNumShadowMaps() <= 0) return false;   // Rect 등 아직 그림자를 지원하지 않는 라이트
+
+	// 씬에 물체가 없으면 caster도 receiver도 없다. 바운딩 구 반지름이 0이면 투영 행렬도 만들 수 없다.
+	if (BVH.IsEmpty()) return false;
+	const FBox& Bounds = BVH.GetRootBounds();
+	return (Bounds.Max - Bounds.Min).Length() > KINDA_SMALL_NUMBER;
+}
+
+void FScene::RenderLightShadowDepth(FRenderer* Renderer, FLightSceneProxy* Proxy)
+{
+	// 건너뛸지는 ShouldRenderShadow에서 이미 정했다. 여기서는 그리기만 한다.
+	const ULightComponent* LightComponent = Proxy->GetLightComponent();
+	const int32 NumShadowMaps = Proxy->GetNumShadowMaps();
+
+	const FBox& Bounds = BVH.GetRootBounds();
+	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+	const float   Radius = (Bounds.Max - Bounds.Min).Length() * 0.5f;
+
+	// 처음 필요할 때 만들고 이후 재사용한다. 해상도가 바뀌면 통째로 다시 만든다.
+	const uint32 Resolution = DefaultShadowMapResolution;
+	if (Proxy->ShadowMaps.Num() != NumShadowMaps || Proxy->ShadowMapResolution != Resolution)
+	{
+		Proxy->ShadowMaps.Reset();
+		for (int32 Index = 0; Index < NumShadowMaps; ++Index)
+			Proxy->ShadowMaps.Add(CreateShadowMap(Resolution));
+		Proxy->ShadowMapResolution = Resolution;
+	}
+
+
+	// Point는 면마다 절두체가 달라 caster도 면마다 다시 고른다.
+	for (int32 Index = 0; Index < NumShadowMaps; ++Index)
+	{
+		FTexture2D* ShadowMap = Proxy->ShadowMaps[Index].get();
+		if (!ShadowMap) continue;
+
+		const FMatrix LightViewProjection = LightComponent->GetShadowViewPorjection(Proxy->ShadowMapResolution, Center, Radius, Index);
+		GatherShadowCasters(LightViewProjection);
+
+		Renderer->TEMP_SetDirectionalShadow(ShadowMap, LightViewProjection);
+
+		// caster가 없어도 그린다.
+		Renderer->RenderShadowDepth(ShadowMap, LightViewProjection, ShadowCasters);
+	}
+}
+
+void FScene::GatherShadowCasters(const FMatrix& LightViewProjection)
+{
+	ShadowCasters.Reset();
+
+	// 직교(Directional)든 원근(Spot·Point 면)이든 ViewProjection에서 뽑은 평면 6개로 같은 검사를 한다.
+	const FFrustumPlanes Frustum = ExtractFrustumPlanes(LightViewProjection);
+	BVH.QueryCull(
+		FrustumAllPlanesMask,
+		[&Frustum](const FBox& Bounds, uint32& Mask)
+		{
+			return static_cast<EBVHCullResult>(ClassifyBoxInFrustum(Bounds, Frustum, Mask));
+		},
+		[this](FPrimitiveSceneProxy* Proxy)
+		{
+			if (!Proxy->IsVisible() || !Proxy->GetMesh()) return;
+			const UPrimitiveComponent* Component = Proxy->GetComponent();
+			if (!Component || !Component->IsCastShadow()) return;
+			ShadowCasters.Add(Proxy);
+		});
 }
 
 void FScene::AddFogInfo(uint32 Id, const FFogInfo& FogInfo)

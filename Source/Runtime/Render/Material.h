@@ -21,8 +21,10 @@ struct FStaticMeshMaterialParams
 	FVector2 UVOffset;
 	float bOpaque; // 1이면 PS가 알파를 1로 출력한다
 	float Shininess; // Blinn-Phong 광택 지수.
+	float AlphaCutOff; //투명 머테리얼이면, AlphaCutOff 이하인 경우 그림자가 지지 않는다.
+	float MaterialPadding[3];
 };
-static_assert(sizeof(FStaticMeshMaterialParams) == 32, "UberLit.hlsl cbuffer MaterialParams 크기와 맞아야 한다");
+static_assert(sizeof(FStaticMeshMaterialParams) == 48, "UberLit.hlsl cbuffer MaterialParams 크기와 맞아야 한다");
 
 class UMaterial : public UMaterialInterface
 {
@@ -43,6 +45,9 @@ public:
 	FVector4 BaseColor = FVector4(1, 1, 1, 1);
 	float Shininess = 32.0f; // Blinn-Phong Specular의 pow 지수
 	FVector2 UVScrollSpeed = FVector2(0.0f, 0.0f);
+
+	//Shadow
+	float AlphaCutOff = 0.5f;
 
 	bool bIsInstance = false;
 

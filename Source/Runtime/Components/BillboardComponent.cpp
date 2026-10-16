@@ -12,6 +12,10 @@ UBillboardComponent::UBillboardComponent()
 {
 	QuadMesh = UAssetManager::GetAssetByPath<UStaticMesh>("ParticleQuad");
 	Material = UAssetManager::GetAssetByPath<UMaterial>("SubUVMaterial");
+
+	//빌보드는 그림자에 관여하지 않는다.
+	bCastShadow = false;
+	bReciveShadow = false;
 }
 
 // Billboard 컴포넌트의 소멸을 처리한다.

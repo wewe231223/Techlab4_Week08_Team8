@@ -317,6 +317,14 @@ void FRenderDevice::CreateStates()
 		Desc.FillMode = D3D11_FILL_WIREFRAME;
 		Desc.CullMode = D3D11_CULL_NONE;
 		Device->CreateRasterizerState(&Desc, RasterizerStates[(uint8)ERasterizerState::Wireframe].GetAddressOf());
+
+		Desc.FillMode = D3D11_FILL_SOLID;
+		Desc.CullMode = D3D11_CULL_BACK;
+		Desc.DepthBias = 1000.f;
+		Desc.SlopeScaledDepthBias = 1.5f;
+		Desc.DepthBiasClamp = 0.0f;
+		Desc.DepthClipEnable = true;
+		Device->CreateRasterizerState(&Desc, RasterizerStates[(uint8)ERasterizerState::ShaderDepth].GetAddressOf());
 	}
 
 	// ---------- DepthStencil ----------
@@ -402,5 +410,14 @@ void FRenderDevice::CreateStates()
 		Desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 
 		Device->CreateSamplerState(&Desc, SamplerStates[(uint8)ESamplerState::LinearWrap].GetAddressOf());
+
+		D3D11_SAMPLER_DESC ShadowDesc = {};
+		ShadowDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+		ShadowDesc.AddressU = ShadowDesc.AddressV = ShadowDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+		ShadowDesc.BorderColor[0] = ShadowDesc.BorderColor[1] = ShadowDesc.BorderColor[2] = ShadowDesc.BorderColor[3] = 1.0f;
+		ShadowDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+		ShadowDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+		Device->CreateSamplerState(&ShadowDesc, SamplerStates[(uint8)ESamplerState::ShadowCompare].GetAddressOf());
 	}
 }

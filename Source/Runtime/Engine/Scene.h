@@ -38,6 +38,8 @@ public:
 
 	void RemoveAllLights();
 	void UpdateLights(FRenderer* Renderer);
+	// 그림자를 만드는 라이트마다 섀도우맵 면별로 caster를 골라 깊이를 기록한다. UpdateLights 뒤에 부른다.
+	void RenderShadowDepth(FRenderer* Renderer);
 
 	void AddFogInfo(uint32 Id, const FFogInfo& FogInfo);
 	void RemoveFogInfo(uint32 Id);
@@ -72,4 +74,14 @@ public:
 	TArray<FLightRenderParameters>        LocalLightParameters;   // GPU 업로드용, 같은 순서
 	TArray<FDirectionalLightSceneProxy*>  DirectionalLightProxies;
 	TArray<USkyLightComponent*>           SkyLights;               // 프록시 없음
+
+private:
+	// 이 라이트의 섀도우맵을 그릴지. UpdateLights(bHasShadow·ShadowIndex)와 RenderShadowDepth가 같이 써서
+	// "플래그는 켜졌는데 섀도우맵은 안 그려진" 상태가 생기지 않게 한다.
+	bool ShouldRenderShadow(const FLightSceneProxy* Proxy) const;
+	void RenderLightShadowDepth(FRenderer* Renderer, FLightSceneProxy* Proxy);
+	void GatherShadowCasters(const FMatrix& LightViewProjection);
+
+	// 멤버로 두어 라이트·면마다 용량을 재사용한다.
+	TArray<FPrimitiveSceneProxy*> ShadowCasters;
 };

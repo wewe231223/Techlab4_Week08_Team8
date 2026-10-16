@@ -17,6 +17,7 @@ public:
 	virtual FLightSceneProxy* CreateSceneProxy() const override;
 
 	ELightType GetLightType() const { return ELightType::Rect; }
+	FMatrix GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index = 0) const override;
 	void DrawDebug(FLineBatcher* LineBatcher) const;
 
 	// Getter

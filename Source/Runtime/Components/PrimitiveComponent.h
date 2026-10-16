@@ -28,6 +28,8 @@ class UPrimitiveComponent :public USceneComponent
 	// (빌보드는 단일 머티리얼, 스태틱 메시는 슬롯별 덮어쓰기) 각자 등록한다.
 	REFLECT_START(ClassName)
 		PROPERTY(bVisible)
+		PROPERTY(bCastShadow)
+		PROPERTY(bReciveShadow)
 		REFLECT_END()
 public:
 	UPrimitiveComponent();
@@ -53,11 +55,15 @@ public:
 	// FShader* GetShader() const { return Shader.get(); };
 
 	bool IsVisible() const { return bVisible; }
+	bool IsCastShadow() const { return bCastShadow; }
+	bool IsReciveShadow() const { return bReciveShadow; }
 	void SetVisible(bool bInVisible)
 	{
 		bVisible = bInVisible;
 		MarkRenderStateDirty();
 	}
+
+	void SetCastShadow(bool bval) { bCastShadow = bval; }
 
 	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit);
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& OutT);
@@ -88,6 +94,10 @@ protected:
 	bool TraceMesh(const FRay& WorldRay, const FStaticMeshData& Mesh, const FMatrix& WorldMatrix, FHitResult& OutResult);
 	bool TraceMeshLocal(const FRay& LocalRay, const FStaticMeshData& Mesh, float& OutT);
 	bool bVisible = true;
+
+	//Shadow
+	bool bCastShadow = true;
+	bool bReciveShadow = true;
 
 private:
 	friend class FScene;

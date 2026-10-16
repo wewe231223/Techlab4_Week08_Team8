@@ -88,6 +88,7 @@ bool FEngineLoop::PreInit(HINSTANCE hInstance, UClass* EngineClass)
 
 	FSplashScreen::SetText(L"Loading Assets...");
 	FRenderResourceManager::Init();
+	Renderer->InitShaderDependents();   // 셰이더 로드 뒤라야 ShadowDepth 셰이더를 찾을 수 있다
 
 	constexpr float AssetStart = 0.1f;
 	constexpr float AssetEnd = 0.8f;
