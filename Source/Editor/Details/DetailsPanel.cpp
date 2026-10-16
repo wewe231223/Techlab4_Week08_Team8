@@ -24,6 +24,8 @@
 #include "GameFramework/Actor.h"
 #include "Core/EngineLog.h"
 
+#include <algorithm>
+
 
 namespace
 {
@@ -537,9 +539,10 @@ namespace
 
 					const char* SamplerItems[] = { "Linear Clamp", "Linear Wrap" };
 					int SamplerIndex = Effective ? static_cast<int>(Effective->SamplerState) : static_cast<int>(ESamplerState::LinearClamp);
+					SamplerIndex = std::clamp(SamplerIndex, 0, IM_ARRAYSIZE(SamplerItems) - 1);
 					if (ImGui::BeginCombo("##SamplerState", SamplerItems[SamplerIndex]))
 					{
-						for (int i = 0; i < static_cast<int>(ESamplerState::Count); ++i)
+						for (int i = 0; i < IM_ARRAYSIZE(SamplerItems); ++i)
 						{
 							if (ImGui::Selectable(SamplerItems[i], SamplerIndex == i))
 							{

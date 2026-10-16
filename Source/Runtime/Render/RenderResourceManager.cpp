@@ -146,25 +146,29 @@ void FRenderResourceManager::LoadOrCompileShader(const FString& Path, const D3D_
 	const bool HasGraphicsInclude{ !bHasCS && Source.find("#include") != std::string::npos };
 
 	if (bHasVS || bHasPS || HasGraphicsInclude) {
+		const bool HasPixelShader{ bHasPS || HasGraphicsInclude };
 		FString VSCSOPath;
 		FString PSCSOPath;
 		FShaderByteCode VSCode = RenderUtil::GetOrCompile(Path, "mainVS", EShaderType::Vertex, VSCSOPath, Macro);
-		FShaderByteCode PSCode = RenderUtil::GetOrCompile(Path, "mainPS", EShaderType::Pixel, PSCSOPath, Macro);
+		FShaderByteCode PSCode{};
+		if (HasPixelShader) {
+			PSCode = RenderUtil::GetOrCompile(Path, "mainPS", EShaderType::Pixel, PSCSOPath, Macro);
+		}
 		const FString Key = MakeShaderKey(Path, Macro);
 
 
 
 
-		if (!VSCode.IsValid() || !PSCode.IsValid())
+		if (!VSCode.IsValid() || (HasPixelShader && !PSCode.IsValid()))
 		{
 			HTR_LOG(Error, "[Shader] compile failed: {}", Key);
 			return;
 		}
 
 		TUniquePtr<FVertexShader> Vs = RenderCommand::CreateVertexShader(VSCode);
-		TUniquePtr<FPixelShader>  Ps = RenderCommand::CreatePixelShader(PSCode);
+		TUniquePtr<FPixelShader>  Ps = HasPixelShader ? RenderCommand::CreatePixelShader(PSCode) : nullptr;
 
-		if (!Vs || !Vs->IsValid() || !Ps || !Ps->IsValid())
+		if (!Vs || !Vs->IsValid() || (HasPixelShader && (!Ps || !Ps->IsValid())))
 		{
 			HTR_LOG(Error, "[Shader] device create failed: {}", Key);
 			return;
@@ -174,7 +178,9 @@ void FRenderResourceManager::LoadOrCompileShader(const FString& Path, const D3D_
 		FPixelShader* PsRaw = Ps.get();
 
 		VertexShaderMap[VSCSOPath] = std::move(Vs);
-		PixelShaderMap[PSCSOPath] = std::move(Ps);
+		if (Ps) {
+			PixelShaderMap[PSCSOPath] = std::move(Ps);
+		}
 
 		ShaderProgramMap[Key] = MakeUnique<FShaderProgram>(VsRaw, PsRaw);
 

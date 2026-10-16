@@ -95,6 +95,7 @@ public:
 	static void SetViewport(uint32 InX, uint32 InY, uint32 InWidth, uint32 InHeight);
 
 	static void SetRasterizerState(ERasterizerState State);
+	static bool SetShadowRasterizerState(float SlopeScaledDepthBias);
 	static void SetBlendState(EBlendState State);
 	static void SetDepthStencilState(EDepthStencilState State);
 	static void BindSamplerState(uint32 Slot, ESamplerState SamplerState, EShaderBindFlagBits FlagBits);

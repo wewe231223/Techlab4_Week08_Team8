@@ -6,18 +6,9 @@
 
 #include <cmath>
 
-ULightComponent::ULightComponent() {
-}
-
-ULightComponent::~ULightComponent() {
-}
-
-void ULightComponent::DrawDebug(FLineBatcher* LineBatcher) const {
-}
-
-FLightSceneProxy* ULightComponent::CreateSceneProxy() const {
-	return nullptr;
-}
+ULightComponent::ULightComponent() {}
+ULightComponent::~ULightComponent() {}
+void ULightComponent::DrawDebug(FLineBatcher* LineBatcher) const {}
 
 void ULightComponent::PostEditChangeProperty(const FProperty& Property) {
 	Super::PostEditChangeProperty(Property);
@@ -54,31 +45,29 @@ void ULightComponent::SetShadowMapResolution(int32 Resolution) {
 }
 
 void ULightComponent::SetShadowDistance(float Distance) {
-	mShadowDistance = SanitizeShadowValue(Distance, FLightShadowSettings{}.mDistance, 0.01f);
+	mShadowDistance = std::max(Distance, 0.01f);
 }
 
 void ULightComponent::SetShadowDepthBias(float DepthBias) {
-	mShadowDepthBias = SanitizeShadowValue(DepthBias, FLightShadowSettings{}.mDepthBias, 0.0f);
+	mShadowDepthBias = std::max(DepthBias, 0.0f);
 }
 
 void ULightComponent::SetShadowSlopeScaledDepthBias(float SlopeScaledDepthBias) {
-	mShadowSlopeScaledDepthBias = SanitizeShadowValue(SlopeScaledDepthBias, FLightShadowSettings{}.mSlopeScaledDepthBias, 0.0f);
+	mShadowSlopeScaledDepthBias = std::max(SlopeScaledDepthBias, 0.0f);
 }
 
 void ULightComponent::SetShadowNormalBias(float NormalBias) {
-	mShadowNormalBias = SanitizeShadowValue(NormalBias, FLightShadowSettings{}.mNormalBias, 0.0f);
+	mShadowNormalBias = std::max(NormalBias, 0.0f);
 }
 
-bool ULightComponent::ShouldCreateRenderState() const {
-	return true;
-}
-
-void ULightComponent::CreateRenderState() {
+void ULightComponent::CreateRenderState()
+{
 	Super::CreateRenderState();
 	GetWorld()->GetScene().AddLight(this);
 }
 
-void ULightComponent::DestroyRenderState() {
+void ULightComponent::DestroyRenderState()
+{
 	GetWorld()->GetScene().RemoveLight(this);
 	Super::DestroyRenderState();
 }

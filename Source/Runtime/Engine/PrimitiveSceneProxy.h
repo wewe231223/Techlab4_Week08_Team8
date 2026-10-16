@@ -8,32 +8,31 @@ class UPrimitiveComponent;
 class UStaticMesh;
 class UMaterial;
 
-class FPrimitiveSceneProxy {
+class FPrimitiveSceneProxy
+{
 public:
-    explicit FPrimitiveSceneProxy(UPrimitiveComponent* InComponent);
+    explicit FPrimitiveSceneProxy(UPrimitiveComponent* InComponent) : Component(InComponent) {}
     ~FPrimitiveSceneProxy();
-
-public:
     void UpdateTransform();
     void UpdateRenderState();
     void OnMeshRenderDataChanged();
     void OnMeshDestroyed();
 
-    UPrimitiveComponent* GetComponent() const;
-    const FAABB& GetBounds() const;
-    const FMatrix& GetLocalToWorld() const;
-    const FMatrix& GetWorldToLocal() const;
-    const FLODSphere& GetLODSphere() const;
-    UStaticMesh* GetMesh() const;
-    bool IsVisible() const;
+    UPrimitiveComponent* GetComponent() const { return Component; }
+    const FAABB& GetBounds() const { return Bounds; }
+    const FMatrix& GetLocalToWorld() const { return LocalToWorld; }
+    const FMatrix& GetWorldToLocal() const { return WorldToLocal; }
+    const FLODSphere& GetLODSphere() const { return LODSphere; }
+    UStaticMesh* GetMesh() const { return Mesh; }
+    bool IsVisible() const { return bVisible; }
     bool CastsShadows() const;
     bool ReceivesShadows() const;
-    uint8 GetLODCount() const;
-    const FMeshRenderState* GetRenderState() const;
-    const float* GetLODThresholdsSq() const;
-    const FCachedMeshLOD& GetLOD(uint32 Index) const;
-    const FCachedMeshSection& GetSection(uint32 Index) const;
-    FScene* GetScene() const;
+    uint8 GetLODCount() const { return RenderState ? RenderState->LODCount : 1; }
+    const FMeshRenderState* GetRenderState() const { return RenderState.get(); }
+    const float* GetLODThresholdsSq() const { return RenderState->LODThresholdSq; }
+    const FCachedMeshLOD& GetLOD(uint32 Index) const { return RenderState->LODs[Index]; }
+    const FCachedMeshSection& GetSection(uint32 Index) const { return RenderState->Sections[Index]; }
+    FScene* GetScene() const { return Scene; }
 private:
     friend class FScene;
     FScene* Scene = nullptr;

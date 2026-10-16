@@ -12,6 +12,14 @@
 constexpr int32 InvalidShadowMapIndex{ -1 };
 constexpr int32 MinShadowMapResolution{ 128 };
 constexpr int32 MaxShadowMapResolution{ 8192 };
+constexpr uint32 ShadowMapTextureSlot{ 13 };
+constexpr int32 DefaultShadowAtlasResolution{ 4096 };
+
+struct FShadowAtlasTile {
+	uint32 mX{};
+	uint32 mY{};
+	uint32 mResolution{};
+};
 
 // 조명 컴포넌트에서 수집하는 그림자 생성 요청 설정. 실제 맵 생성과 샘플링은 그림자 렌더 패스에서 처리한다.
 struct FLightShadowSettings {

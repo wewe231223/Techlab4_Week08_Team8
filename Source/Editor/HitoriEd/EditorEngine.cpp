@@ -15,6 +15,7 @@
 #include "Engine/Level.h"
 
 #include "Render/Renderer.h"
+#include "Render/ShadowView.h"
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -891,6 +892,8 @@ void UEditorEngine::RenderDepthPass(const int32 ViewIndex, const FRenderingInfo&
 	RenderCommand::BeginRenderPass(PassInfo);
 	DepthViewRenderer->OnRender(ViewRenderingInfo.DepthStencil.Texture, ViewProjection, ViewCameraLocation, ViewCameraForward);
 	RenderCommand::EndRenderPass(PassInfo);
+
+	RenderCommand::UnbindShaderResource(0, EShaderBindFlagBits::Pixel);
 }
 
 // 입력 View의 Ray와 피킹으로 Gizmo·공유 선택을 갱신한다.
@@ -946,6 +949,10 @@ void UEditorEngine::UpdateGizmoAndPicking()
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
 void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue)
 {
+	FScene& Scene{ ViewWorld.GetScene() };
+	TArray<FShadowMapRequest> ShadowRequests{};
+	Scene.GatherShadowRequests(ShadowRequests, ViewCameraLocation);
+	Renderer->RenderShadowAtlas(Scene, ShadowRequests);
 
 	RenderOpaquePass(ViewIndex, ViewRenderingInfo, ViewProjection, ViewCameraLocation, ViewCameraForward, RenderQueue);
 

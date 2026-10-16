@@ -10,6 +10,7 @@
 #include "RenderEnums.h"
 #include "Material.h"
 #include "ShadowMap.h"
+#include "ShadowMapResource.h"
 
 constexpr uint32 ObjectSlotBytes = 256;
 
@@ -179,11 +180,17 @@ struct alignas(16) FLightGridConstants
 static_assert(sizeof(FLightGridConstants) == 48, "UberLit의 cbuffer LightGrid와 같아야 한다");
 
 struct FLightRenderParameters;
+struct FShadowView;
+struct FShadowMapRequest;
+class FScene;
 
 class FRenderer
 {
 public:
 	bool Init();
+	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = DefaultShadowAtlasResolution);
+	FTexture2D* GetShadowDepthTexture() const;
+	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
 
 	// 기존 단일 카메라의 ViewProjection으로 렌더 큐 전체를 그린다.
 	void RenderAll(FRenderQueue& InQueue, UCameraComponent* CameraComponent);
@@ -236,6 +243,8 @@ public:
 	void SetLightCullingMode(ELightCullingMode Mode) { LightCullingMode = Mode; }
 	ELightCullingMode GetLightCullingMode() const { return LightCullingMode; }
 private:
+	bool InitializeShadowPass();
+	void DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile);
 	void DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProjection);
 	void DrawStaticGroups();
 	void UpdatePerObjectConstants(const FMatrix& World);
@@ -246,6 +255,14 @@ private:
 	void UploadPerObjectConstants();
 
 private:
+	FShadowMapResource mShadowMapResource{};
+	FRenderQueue mShadowRenderQueue{};
+	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
+	FShaderProgram* mShadowShader{};
+	TUniquePtr<FConstantBuffer> mShadowViewCB{};
+	TUniquePtr<FConstantBuffer> mShadowObjectCB{};
+	bool mShadowMapReady{};
+
 	// private
 	TUniquePtr<FConstantBuffer> GridLightingCB{};
 	// NumTilesX = 0인 b5. 2.5D 목록은 불투명 깊이 기준이라 반투명은 이것으로 전체 순회한다.

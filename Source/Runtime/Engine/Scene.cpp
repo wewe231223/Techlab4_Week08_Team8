@@ -5,6 +5,11 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/RectLightComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Asset/LOD/StaticMeshLODSelector.h"
+#include "Render/ShadowView.h"
+
+#include <algorithm>
 
 void FScene::AddPrimitive(UPrimitiveComponent* Component)
 {
@@ -371,4 +376,61 @@ void FScene::MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy)
 	if (!Proxy || Proxy->bRenderStateQueued) return;
 	Proxy->bRenderStateQueued = true;
 	RenderStateDirtyProxies.Add(Proxy);
+}
+
+void FScene::GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests, const FVector& Center) const {
+	OutRequests.Reset();
+	OutRequests.Reserve(DirectionalLightProxies.Num());
+	for (const FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies) {
+		FShadowView View{};
+		if (Proxy && Proxy->BuildShadowView(Center, View)) {
+			OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings() });
+		}
+	}
+}
+
+void FScene::GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution) {
+	OutQueue.Reset();
+	const FFrustumPlanes Frustum{ ExtractFrustumPlanes(View.mViewProjection) };
+	const float ProjectionScale{ std::max(std::abs(View.mProjection.M[1][0]), std::abs(View.mProjection.M[2][1])) };
+	const uint32 Size{ static_cast<uint32>(std::clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution)) };
+	FLODViewContext LODView{};
+	LODView.Width = Size;
+	LODView.Height = Size;
+	LODView.CameraPosition = View.mWorldPosition;
+	LODView.CameraForward = FVector{ View.mView.M[0][0], View.mView.M[1][0], View.mView.M[2][0] };
+	LODView.ProjectionScaleSquared = ProjectionScale * ProjectionScale;
+	LODView.NearZ = View.mNearPlane;
+	LODView.bOrthographic = true;
+	LODView.ViewProjection = View.mViewProjection;
+	LODView.Prepare();
+
+	BVH.QueryCull(FrustumAllPlanesMask, [&Frustum](const FBox& Bounds, uint32& Mask) {
+		return static_cast<EBVHCullResult>(ClassifyBoxInFrustum(Bounds, Frustum, Mask));
+	}, [&OutQueue, &LODView](FPrimitiveSceneProxy* Proxy) {
+		if (!Proxy || !Proxy->IsVisible() || !Proxy->CastsShadows() || !Proxy->GetMesh() || !Proxy->GetRenderState()) {
+			return;
+		}
+		const UStaticMeshComponent* Component{ Cast<UStaticMeshComponent>(Proxy->GetComponent()) };
+		if (Component && Component->IsEditorIcon()) {
+			return;
+		}
+
+		const uint32 LODIndex{ SelectLOD(*Proxy, LODView) };
+		const FCachedMeshLOD& LOD{ Proxy->GetLOD(LODIndex) };
+		for (uint32 SectionIndex{}; SectionIndex < LOD.NumSections; ++SectionIndex) {
+			const FCachedMeshSection& Section{ Proxy->GetSection(LOD.FirstSection + SectionIndex) };
+			if (!Section.Material || Section.Material->BlendState != EBlendState::Opaque || Section.IndexCount == 0) {
+				continue;
+			}
+
+			FRenderPacket& Packet{ OutQueue.AddDefaulted_GetRef() };
+			Packet.Proxy = Proxy;
+			Packet.Mesh = Proxy->GetMesh();
+			Packet.Material = Section.Material;
+			Packet.StartIndex = Section.StartIndex;
+			Packet.IndexCount = Section.IndexCount;
+			Packet.LODIndex = static_cast<uint8>(LODIndex);
+		}
+	});
 }

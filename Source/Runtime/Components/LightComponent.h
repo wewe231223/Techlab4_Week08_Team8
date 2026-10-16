@@ -4,9 +4,8 @@
 #include "Render/LineBatcher.h"
 #include "Render/ShadowMap.h"
 
-class FLightSceneProxy;
-
-class ULightComponent : public ULightComponentBase {
+class ULightComponent : public ULightComponentBase
+{
 	DECLARE_CLASS(ULightComponent, ULightComponentBase)
 	REFLECT_START(ULightComponent)
 		PROPERTY(mCastShadows)
@@ -20,10 +19,8 @@ public:
 	ULightComponent();
 	virtual ~ULightComponent() override;
 
-public:
 	virtual ELightType GetLightType() const = 0;
 	virtual void DrawDebug(FLineBatcher* LineBatcher) const;
-	virtual FLightSceneProxy* CreateSceneProxy() const;
 	virtual void PostEditChangeProperty(const FProperty& Property) override;
 
 	bool CastsShadows() const;
@@ -34,10 +31,15 @@ public:
 	void SetShadowDepthBias(float DepthBias);
 	void SetShadowSlopeScaledDepthBias(float SlopeScaledDepthBias);
 	void SetShadowNormalBias(float NormalBias);
-
+	virtual class FLightSceneProxy* CreateSceneProxy() const
+	{
+		return NULL;
+	}
 	FLightSceneProxy* SceneProxy = nullptr;
 protected:
-	virtual bool ShouldCreateRenderState() const override;
+	virtual bool ShouldCreateRenderState() const override
+	{ return true; }
+
 	virtual void CreateRenderState() override;
 	virtual void DestroyRenderState() override;
 private:

@@ -7,6 +7,8 @@
 #include "PipelineState.h"
 #include "DDSTextureLoader11.h"
 
+#include <cmath>
+
 FRenderDevice::FRenderDevice()
 {
 	uint32 CreationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -63,6 +65,29 @@ FRenderDevice::FRenderDevice()
 
 FRenderDevice::~FRenderDevice()
 {
+}
+
+ID3D11RasterizerState* FRenderDevice::GetShadowRasterizerState(float SlopeScaledDepthBias) {
+	if (!Device || !std::isfinite(SlopeScaledDepthBias) || SlopeScaledDepthBias < 0.0f) {
+		return nullptr;
+	}
+
+	const auto Found{ mShadowRasterizerStates.find(SlopeScaledDepthBias) };
+	if (Found != mShadowRasterizerStates.end()) {
+		return Found->second.Get();
+	}
+
+	D3D11_RASTERIZER_DESC Desc{};
+	Desc.FillMode = D3D11_FILL_SOLID;
+	Desc.CullMode = D3D11_CULL_BACK;
+	Desc.DepthClipEnable = TRUE;
+	Desc.SlopeScaledDepthBias = SlopeScaledDepthBias;
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> State{};
+	if (FAILED(Device->CreateRasterizerState(&Desc, State.GetAddressOf()))) {
+		return nullptr;
+	}
+
+	return mShadowRasterizerStates.emplace(SlopeScaledDepthBias, std::move(State)).first->second.Get();
 }
 
 
@@ -402,5 +427,17 @@ void FRenderDevice::CreateStates()
 		Desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 
 		Device->CreateSamplerState(&Desc, SamplerStates[(uint8)ESamplerState::LinearWrap].GetAddressOf());
+
+		Desc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+		Desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+		Desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+		Desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+		Desc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+		Desc.BorderColor[0] = 1.0f;
+		Desc.BorderColor[1] = 1.0f;
+		Desc.BorderColor[2] = 1.0f;
+		Desc.BorderColor[3] = 1.0f;
+		Desc.MaxLOD = 0.0f;
+		Device->CreateSamplerState(&Desc, SamplerStates[static_cast<uint8>(ESamplerState::ShadowComparison)].GetAddressOf());
 	}
 }

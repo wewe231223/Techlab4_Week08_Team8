@@ -5,16 +5,17 @@
 #include "SceneManagement.h"
 
 
-class FLightSceneProxy {
+class FLightSceneProxy
+{
 public:
-	FLightSceneProxy(const ULightComponent* InLightComponent);
+	FLightSceneProxy(const ULightComponent* InLightComponent)
+		:LightComponent(InLightComponent) {};
 	virtual ~FLightSceneProxy() = default;
 
-public:
 	virtual void GetLightShaderParameters(FLightRenderParameters& OutParameters) const = 0;
 
-	const ULightComponent* GetLightComponent() const;
-	bool IsVisible() const;
+	const ULightComponent* GetLightComponent() const { return LightComponent; }
+	bool IsVisible() const { return LightComponent->IsVisible(); }
 	FLightShadowSettings GetShadowSettings() const;
 
 protected:

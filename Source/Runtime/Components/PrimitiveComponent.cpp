@@ -56,34 +56,6 @@ void UPrimitiveComponent::PostEditChangeProperty(const FProperty& Property) {
 	}
 }
 
-const FStaticMeshData* UPrimitiveComponent::GetMeshData() const {
-	return nullptr;
-}
-
-UStaticMesh* UPrimitiveComponent::GetRenderMesh() const {
-	return nullptr;
-}
-
-int32 UPrimitiveComponent::GetNumMaterials() const {
-	return 0;
-}
-
-UMaterial* UPrimitiveComponent::GetMaterial(int32 SlotIndex) const {
-	return nullptr;
-}
-
-void UPrimitiveComponent::SetMaterial(int32 SlotIndex, UMaterial* InMaterial) {
-}
-
-bool UPrimitiveComponent::IsVisible() const {
-	return bVisible;
-}
-
-void UPrimitiveComponent::SetVisible(bool InVisible) {
-	bVisible = InVisible;
-	MarkRenderStateDirty();
-}
-
 bool UPrimitiveComponent::CastsShadows() const {
 	return mCastShadows;
 }
@@ -106,19 +78,6 @@ void UPrimitiveComponent::SetReceiveShadows(bool ReceiveShadows) {
 	}
 	mReceiveShadows = ReceiveShadows;
 	MarkRenderStateDirty();
-}
-
-FBox UPrimitiveComponent::CalcLocalBounds() const {
-	const FStaticMeshData* Data{ GetMeshData() };
-	return Data ? Data->AABB : Super::CalcLocalBounds();
-}
-
-FPrimitiveSceneProxy* UPrimitiveComponent::GetSceneProxy() const {
-	return SceneProxy;
-}
-
-bool UPrimitiveComponent::ShouldCreateRenderState() const {
-	return true;
 }
 
 

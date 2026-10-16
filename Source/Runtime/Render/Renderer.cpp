@@ -8,9 +8,11 @@
 
 #include "Engine/PrimitiveSceneProxy.h"
 #include "Engine/SceneManagement.h"
+#include "Engine/Scene.h"
 
 #include "RenderCommand.h"
 #include "RenderResourceManager.h"
+#include "ShadowView.h"
 
 #include "Camera/CameraComponent.h"
 #include "Asset/AssetManager.h"
@@ -19,6 +21,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <bit>
+#include <cmath>
 
 DECLARE_CYCLE_STAT("Draw Render Packets", STAT_DrawRenderPackets);
 DECLARE_CYCLE_STAT("Render Queue Sorting", STAT_RenderQueueSorting);
@@ -31,6 +34,90 @@ namespace
 	static_assert(sizeof(FPerObjectConstants) <= ObjectSlotBytes);
 
 	constexpr uint32 MinPerObjectSlots = 1024;
+
+	struct FShadowAtlasFreeRect {
+		uint32 mX{};
+		uint32 mY{};
+		uint32 mWidth{};
+		uint32 mHeight{};
+	};
+
+	bool IsValidShadowRequest(const FShadowMapRequest& Request) {
+		const FShadowView& View{ Request.mView };
+		if (!Request.mSettings.mCastShadows || !std::isfinite(Request.mSettings.mSlopeScaledDepthBias) || Request.mSettings.mSlopeScaledDepthBias < 0.0f || !std::isfinite(View.mNearPlane) || !std::isfinite(View.mFarPlane) || View.mNearPlane < 0.0f || View.mFarPlane <= View.mNearPlane || !std::isfinite(View.mWorldPosition.X) || !std::isfinite(View.mWorldPosition.Y) || !std::isfinite(View.mWorldPosition.Z)) {
+			return false;
+		}
+		for (const FMatrix* Matrix : { &View.mView, &View.mProjection, &View.mViewProjection }) {
+			for (uint32 Row{}; Row < 4; ++Row) {
+				for (uint32 Column{}; Column < 4; ++Column) {
+					if (!std::isfinite(Matrix->M[Row][Column])) {
+						return false;
+					}
+				}
+			}
+		}
+		for (uint32 PlaneIndex{}; PlaneIndex < 6; ++PlaneIndex) {
+			const uint32 Column{ PlaneIndex / 2 };
+			const float Scale{ PlaneIndex % 2 == 0 ? 1.0f : -1.0f };
+			FVector Normal{ View.mViewProjection.M[0][Column] * Scale, View.mViewProjection.M[1][Column] * Scale, View.mViewProjection.M[2][Column] * Scale };
+			if (PlaneIndex != 4) {
+				Normal += FVector{ View.mViewProjection.M[0][3], View.mViewProjection.M[1][3], View.mViewProjection.M[2][3] };
+			}
+			const float LengthSquared{ Normal.SizeSquared() };
+			if (!std::isfinite(LengthSquared) || LengthSquared <= 1.0e-12f) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	TArray<FShadowAtlasTile> BuildShadowAtlasTiles(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution) {
+		TArray<FShadowAtlasTile> Tiles{};
+		Tiles.SetNum(Requests.Num());
+		TArray<uint32> SortedIndices{};
+		for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
+			if (IsValidShadowRequest(Requests[Index])) {
+				SortedIndices.Add(Index);
+			}
+		}
+		std::sort(SortedIndices.begin(), SortedIndices.end(), [&Requests](uint32 Left, uint32 Right) {
+			const int32 LeftResolution{ std::clamp(Requests[Left].mSettings.mResolution, MinShadowMapResolution, MaxShadowMapResolution) };
+			const int32 RightResolution{ std::clamp(Requests[Right].mSettings.mResolution, MinShadowMapResolution, MaxShadowMapResolution) };
+			return LeftResolution != RightResolution ? LeftResolution > RightResolution : Left < Right;
+		});
+
+		TArray<FShadowAtlasFreeRect> FreeRects{};
+		FreeRects.Add(FShadowAtlasFreeRect{ 0, 0, AtlasResolution, AtlasResolution });
+		for (uint32 Index : SortedIndices) {
+			const uint32 Resolution{ static_cast<uint32>(std::clamp(Requests[Index].mSettings.mResolution, MinShadowMapResolution, MaxShadowMapResolution)) };
+			int32 BestIndex{ InvalidShadowMapIndex };
+			uint64 BestArea{};
+			for (uint32 RectIndex{}; RectIndex < static_cast<uint32>(FreeRects.Num()); ++RectIndex) {
+				const FShadowAtlasFreeRect& Rect{ FreeRects[RectIndex] };
+				const uint64 Area{ static_cast<uint64>(Rect.mWidth) * Rect.mHeight };
+				if (Resolution <= Rect.mWidth && Resolution <= Rect.mHeight && (BestIndex == InvalidShadowMapIndex || Area < BestArea)) {
+					BestIndex = static_cast<int32>(RectIndex);
+					BestArea = Area;
+				}
+			}
+			if (BestIndex == InvalidShadowMapIndex) {
+				continue;
+			}
+
+			const FShadowAtlasFreeRect Rect{ FreeRects[BestIndex] };
+			FreeRects.RemoveAtSwap(BestIndex);
+			Tiles[Index] = FShadowAtlasTile{ Rect.mX, Rect.mY, Resolution };
+			const uint32 RemainingWidth{ Rect.mWidth - Resolution };
+			const uint32 RemainingHeight{ Rect.mHeight - Resolution };
+			if (RemainingWidth > 0) {
+				FreeRects.Add(FShadowAtlasFreeRect{ Rect.mX + Resolution, Rect.mY, RemainingWidth, RemainingWidth > RemainingHeight ? Rect.mHeight : Resolution });
+			}
+			if (RemainingHeight > 0) {
+				FreeRects.Add(FShadowAtlasFreeRect{ Rect.mX, Rect.mY + Resolution, RemainingWidth > RemainingHeight ? Resolution : Rect.mWidth, RemainingHeight });
+			}
+		}
+		return Tiles;
+	}
 
 	const FMatrix& GetPacketWorld(const FRenderPacket& Packet)
 	{
@@ -709,4 +796,94 @@ void FRenderer::CullLights(const FMatrix& View, const FMatrix& Projection, uint3
 void FRenderer::SetLightDebugMode(uint32 Mode)
 {
 	LightDebugMode = Mode;
+}
+
+bool FRenderer::InitializeShadowPass() {
+	if (!mShadowShader) {
+		FShaderProgram* Shader{ FRenderResourceManager::GetShaderProgram("Resources/Shader/ShadowDepth.hlsl") };
+		if (!Shader || !Shader->VertexShader || !Shader->VertexShader->IsValid() || !Shader->VertexShader->GetLayout() || Shader->PixelShader) {
+			return false;
+		}
+		mShadowShader = Shader;
+	}
+	if (!mShadowViewCB || !mShadowViewCB->GetBuffer()) {
+		mShadowViewCB = RenderCommand::CreateConstantBuffer(sizeof(FMatrix));
+	}
+	if (!mShadowObjectCB || !mShadowObjectCB->GetBuffer()) {
+		mShadowObjectCB = RenderCommand::CreateConstantBuffer(sizeof(FMatrix));
+	}
+	return mShadowViewCB && mShadowViewCB->GetBuffer() && mShadowObjectCB && mShadowObjectCB->GetBuffer();
+}
+
+bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution) {
+	mShadowMapReady = false;
+	mShadowMapRenderParameters.Reset();
+	mShadowMapRenderParameters.SetNum(Requests.Num());
+	const uint32 Size{ static_cast<uint32>(std::clamp(AtlasResolution, MinShadowMapResolution, MaxShadowMapResolution)) };
+	const TArray<FShadowAtlasTile> Tiles{ BuildShadowAtlasTiles(Requests, Size) };
+	uint32 TileCount{};
+	for (const FShadowAtlasTile& Tile : Tiles) {
+		TileCount += Tile.mResolution != 0;
+	}
+	if (TileCount == 0 || !InitializeShadowPass() || !mShadowMapResource.Initialize(static_cast<int32>(Size))) {
+		return false;
+	}
+
+	FTexture2D* DepthTexture{ mShadowMapResource.GetDepthTexture() };
+	RenderCommand::UnbindShaderResource(ShadowMapTextureSlot, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Compute);
+	FRenderingInfo PassInfo{};
+	PassInfo.DepthStencil.Texture = DepthTexture;
+	PassInfo.ViewportSetting.Width = DepthTexture->GetWidth();
+	PassInfo.ViewportSetting.Height = DepthTexture->GetHeight();
+	RenderCommand::BeginRenderPass(PassInfo);
+	RenderCommand::BindShaderProgram(mShadowShader);
+	RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	RenderCommand::SetBlendState(EBlendState::Opaque);
+	RenderCommand::SetDepthStencilState(EDepthStencilState::Default);
+	RenderCommand::BindConstantBuffer(0, mShadowViewCB.get(), EShaderBindFlagBits::Vertex);
+	RenderCommand::BindConstantBuffer(2, mShadowObjectCB.get(), EShaderBindFlagBits::Vertex);
+	for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
+		const FShadowAtlasTile& Tile{ Tiles[Index] };
+		const FShadowMapRequest& Request{ Requests[Index] };
+		if (Tile.mResolution == 0 || !RenderCommand::SetShadowRasterizerState(Request.mSettings.mSlopeScaledDepthBias)) {
+			continue;
+		}
+		DrawShadowCasters(Scene, Request.mView, Tile);
+		FShadowMapRenderParameters& Parameters{ mShadowMapRenderParameters[Index] };
+		Parameters = BuildShadowMapRenderParameters(Request.mView, Request.mSettings, DepthTexture, Tile);
+		Parameters.mTextureIndex = 0;
+		mShadowMapReady = true;
+	}
+	RenderCommand::EndRenderPass(PassInfo);
+	return mShadowMapReady;
+}
+
+void FRenderer::DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile) {
+	Scene.GatherShadowCasters(mShadowRenderQueue, View, static_cast<int32>(Tile.mResolution));
+	RenderCommand::SetViewport(Tile.mX, Tile.mY, Tile.mResolution, Tile.mResolution);
+	RenderCommand::UpdateBufferData(mShadowViewCB.get(), &View.mViewProjection, sizeof(FMatrix));
+	UStaticMesh* BoundMesh{};
+	uint32 BoundLOD{};
+	for (const FRenderPacket& Packet : mShadowRenderQueue) {
+		FVertexBuffer* VertexBuffer{ Packet.Mesh->GetVertexBuffer(Packet.LODIndex) };
+		FIndexBuffer* IndexBuffer{ Packet.Mesh->GetIndexBuffer(Packet.LODIndex) };
+		if (!VertexBuffer || !VertexBuffer->GetBuffer() || !IndexBuffer || !IndexBuffer->GetBuffer() || Packet.StartIndex > IndexBuffer->GetIndexCount() || Packet.IndexCount > IndexBuffer->GetIndexCount() - Packet.StartIndex) {
+			continue;
+		}
+		if (BoundMesh != Packet.Mesh || BoundLOD != Packet.LODIndex) {
+			RenderCommand::BindMesh(Packet.Mesh, Packet.LODIndex);
+			BoundMesh = Packet.Mesh;
+			BoundLOD = Packet.LODIndex;
+		}
+		RenderCommand::UpdateBufferData(mShadowObjectCB.get(), &Packet.Proxy->GetLocalToWorld(), sizeof(FMatrix));
+		RenderCommand::DrawIndexed(Packet.IndexCount, Packet.StartIndex);
+	}
+}
+
+FTexture2D* FRenderer::GetShadowDepthTexture() const {
+	return mShadowMapReady ? mShadowMapResource.GetDepthTexture() : nullptr;
+}
+
+const TArray<FShadowMapRenderParameters>& FRenderer::GetShadowMapRenderParameters() const {
+	return mShadowMapRenderParameters;
 }

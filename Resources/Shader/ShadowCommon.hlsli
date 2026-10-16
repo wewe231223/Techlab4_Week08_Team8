@@ -16,4 +16,10 @@ struct FShadowMapRenderParameters {
     uint2 mPadding; // CPU 구조체와 크기 및 배열 항목 간격을 일치시키는 패딩.
 };
 
+float2 GetShadowAtlasUv(float2 ShadowUv, FShadowMapRenderParameters Parameters) {
+    float2 MinimumUv = { Parameters.mUvScaleBias.zw + Parameters.mTexelSize * 0.5f };
+    float2 MaximumUv = { Parameters.mUvScaleBias.zw + Parameters.mUvScaleBias.xy - Parameters.mTexelSize * 0.5f };
+    return clamp(ShadowUv * Parameters.mUvScaleBias.xy + Parameters.mUvScaleBias.zw, MinimumUv, MaximumUv);
+}
+
 #endif

@@ -109,7 +109,7 @@ void RenderCommand::BindPipelineState(const FPipelineState& PipelineState)
 void RenderCommand::BindShaderProgram(FShaderProgram* Shader)
 {
 	RenderDevice->GetContext()->VSSetShader(Shader->VertexShader->GetShader(), nullptr, 0);
-	RenderDevice->GetContext()->PSSetShader(Shader->PixelShader->GetShader(), nullptr, 0);
+	RenderDevice->GetContext()->PSSetShader(Shader->PixelShader ? Shader->PixelShader->GetShader() : nullptr, nullptr, 0);
 	RenderDevice->GetContext()->IASetInputLayout(Shader->VertexShader->GetLayout());
 }
 
@@ -290,6 +290,16 @@ void RenderCommand::SetRasterizerState(ERasterizerState State)
 	RenderDevice->GetContext()->RSSetState(RenderDevice->GetRasterizerState(State));
 }
 
+bool RenderCommand::SetShadowRasterizerState(float SlopeScaledDepthBias) {
+	ID3D11RasterizerState* State{ RenderDevice->GetShadowRasterizerState(SlopeScaledDepthBias) };
+	if (!State) {
+		return false;
+	}
+
+	RenderDevice->GetContext()->RSSetState(State);
+	return true;
+}
+
 void RenderCommand::SetBlendState(EBlendState State)
 {
 	RenderDevice->GetContext()->OMSetBlendState(RenderDevice->GetBlendState(State), nullptr, 0xffffffff);
@@ -311,6 +321,9 @@ void RenderCommand::BindSamplerState(uint32 Slot, ESamplerState SamplerState, ES
 	if (HasFlag(FlagBits, EShaderBindFlagBits::Pixel))
 	{
 		RenderDevice->GetContext()->PSSetSamplers(Slot, 1, &Sampler);
+	}
+	if (HasFlag(FlagBits, EShaderBindFlagBits::Compute)) {
+		RenderDevice->GetContext()->CSSetSamplers(Slot, 1, &Sampler);
 	}
 }
 

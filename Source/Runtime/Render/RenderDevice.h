@@ -4,6 +4,8 @@
 #include "RenderStates.h"
 #include "Core/EngineString.h"
 
+#include <unordered_map>
+
 class FVertexBuffer;
 class FShader;
 class FVertexShader;
@@ -55,6 +57,7 @@ public:
 	TUniquePtr<FShaderProgram> CreateShader(const wchar_t* FileName, D3D11_INPUT_ELEMENT_DESC* InLayoutDesc, size_t InLayoutSize);
 
 	inline ID3D11RasterizerState* GetRasterizerState(ERasterizerState State) const { return RasterizerStates[(uint8)State].Get(); }
+	ID3D11RasterizerState* GetShadowRasterizerState(float SlopeScaledDepthBias);
 	inline ID3D11DepthStencilState* GetDepthStencilState(EDepthStencilState State) const { return DepthStencilStates[(uint8)State].Get(); }
 	inline ID3D11BlendState* GetBlendState(EBlendState State) const { return BlendStates[(uint8)State].Get(); }
 	inline ID3D11SamplerState* GetSamplerState(ESamplerState State) const { return SamplerStates[(uint8)State].Get(); }
@@ -75,4 +78,5 @@ private:
 	ComPtr<ID3D11DepthStencilState> DepthStencilStates[(uint8)EDepthStencilState::Count];
 	ComPtr<ID3D11BlendState>        BlendStates[(uint8)EBlendState::Count];
 	ComPtr<ID3D11SamplerState>      SamplerStates[(uint8)ESamplerState::Count];
+	std::unordered_map<float, Microsoft::WRL::ComPtr<ID3D11RasterizerState>> mShadowRasterizerStates{};
 };
