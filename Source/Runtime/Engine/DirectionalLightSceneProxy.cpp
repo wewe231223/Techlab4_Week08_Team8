@@ -19,7 +19,7 @@ void FDirectionalLightSceneProxy::GetLightShaderParameters(FLightRenderParameter
 	Out.Intensity = Dir->GetIntensity();
 }
 
-bool FDirectionalLightSceneProxy::BuildShadowView(const FVector& Center, FShadowView& OutView) const {
+bool FDirectionalLightSceneProxy::BuildShadowView(const FBox& CasterBounds, FShadowView& OutView) const {
 	const FLightShadowSettings Settings{ GetShadowSettings() };
 	if (!IsVisible() || !Settings.mCastShadows) {
 		return false;
@@ -27,5 +27,5 @@ bool FDirectionalLightSceneProxy::BuildShadowView(const FVector& Center, FShadow
 
 	FLightRenderParameters Parameters{};
 	GetLightShaderParameters(Parameters);
-	return BuildDirectionalShadowView(Parameters.Direction, Center, Settings.mDistance, OutView);
+	return BuildDirectionalShadowView(Parameters.Direction, CasterBounds, Settings.mResolution, OutView);
 }

@@ -119,6 +119,7 @@ bool UEditorEngine::Init()
 
 	// 필요한 Panel들 추가후 raw pointer 반환(소유권 = EditorUI)
 	DetailsPanel = EditorUI->AddEditorPanel<FDetailsPanel>();
+	DetailsPanel->SetRenderer(Renderer);
 	EditorControlsPanel = EditorUI->AddEditorPanel<FEditorControlsPanel>();
 	ViewportsPanel = EditorUI->AddEditorPanel<FViewportsPanel>();
 	ContentDrawerPanel = EditorUI->AddEditorPanel<FContentDrawerPanel>();
@@ -951,7 +952,7 @@ void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const 
 {
 	FScene& Scene{ ViewWorld.GetScene() };
 	TArray<FShadowMapRequest> ShadowRequests{};
-	Scene.GatherShadowRequests(ShadowRequests, ViewCameraLocation);
+	Scene.GatherShadowRequests(ShadowRequests);
 	Renderer->RenderShadowAtlas(Scene, ShadowRequests);
 
 	RenderOpaquePass(ViewIndex, ViewRenderingInfo, ViewProjection, ViewCameraLocation, ViewCameraForward, RenderQueue);

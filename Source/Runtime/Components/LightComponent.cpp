@@ -13,7 +13,6 @@ void ULightComponent::DrawDebug(FLineBatcher* LineBatcher) const {}
 void ULightComponent::PostEditChangeProperty(const FProperty& Property) {
 	Super::PostEditChangeProperty(Property);
 	SetShadowMapResolution(mShadowMapResolution);
-	SetShadowDistance(mShadowDistance);
 	SetShadowDepthBias(mShadowDepthBias);
 	SetShadowSlopeScaledDepthBias(mShadowSlopeScaledDepthBias);
 	SetShadowNormalBias(mShadowNormalBias);
@@ -27,7 +26,6 @@ FLightShadowSettings ULightComponent::GetShadowSettings() const {
 	FLightShadowSettings Settings{
 		.mCastShadows = mCastShadows,
 		.mResolution = FMath::Clamp(mShadowMapResolution, MinShadowMapResolution, MaxShadowMapResolution),
-		.mDistance = std::max(mShadowDistance, 0.01f),
 		.mDepthBias = std::max(mShadowDepthBias, 0.0f),
 		.mSlopeScaledDepthBias = std::max(mShadowSlopeScaledDepthBias, 0.0f),
 		.mNormalBias = std::max(mShadowNormalBias, 0.0f)		
@@ -42,10 +40,6 @@ void ULightComponent::SetCastShadows(bool CastShadows) {
 
 void ULightComponent::SetShadowMapResolution(int32 Resolution) {
 	mShadowMapResolution = FMath::Clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution);
-}
-
-void ULightComponent::SetShadowDistance(float Distance) {
-	mShadowDistance = std::max(Distance, 0.01f);
 }
 
 void ULightComponent::SetShadowDepthBias(float DepthBias) {

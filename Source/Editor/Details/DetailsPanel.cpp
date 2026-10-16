@@ -18,6 +18,7 @@
 #include "Components/FireBallComponent.h"
 #include "Asset/AssetManager.h"
 #include "Render/Material.h"
+#include "Render/Renderer.h"
 #include "Render/Texture2D.h"
 #include "Text/Font.h"
 #include "UObject/UObjectIterator.h"
@@ -902,6 +903,9 @@ void FDetailsPanel::OnRender()
 			{
 				DrawMaterialSlots(MeshComponent);
 			}
+			if (ULightComponent* LightComponent{ Cast<ULightComponent>(TargetComponent) }) {
+				DrawShadowMap(LightComponent);
+			}
 			ImGui::PopID();
 
 			if (PendingDeleteComponent)
@@ -918,6 +922,33 @@ void FDetailsPanel::OnRender()
 	ImGui::End();
 }
 
+
+void FDetailsPanel::SetRenderer(FRenderer* Renderer) {
+	mRenderer = Renderer;
+}
+
+void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
+	if (!ImGui::CollapsingHeader("Shadow Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+		return;
+	}
+
+	FTexture2D* Atlas{ mRenderer ? mRenderer->GetShadowDepthTexture() : nullptr };
+	const FShadowMapRenderParameters* Parameters{ mRenderer ? mRenderer->GetShadowMapRenderParameters(LightComponent) : nullptr };
+	if (!Atlas || !Atlas->GetSRV() || !Parameters) {
+		ImGui::TextDisabled("Shadow map is not available for this light.");
+		return;
+	}
+
+	const FVector4& UvScaleBias{ Parameters->mUvScaleBias };
+	const ImVec2 UvMin{ UvScaleBias.Z + Parameters->mTexelSize.X * 0.5f, UvScaleBias.W + Parameters->mTexelSize.Y * 0.5f };
+	const ImVec2 UvMax{ UvScaleBias.Z + UvScaleBias.X - Parameters->mTexelSize.X * 0.5f, UvScaleBias.W + UvScaleBias.Y - Parameters->mTexelSize.Y * 0.5f };
+	const uint32 Width{ static_cast<uint32>(Atlas->GetWidth() * UvScaleBias.X + 0.5f) };
+	const uint32 Height{ static_cast<uint32>(Atlas->GetHeight() * UvScaleBias.Y + 0.5f) };
+	ImGui::TextDisabled("Last rendered view");
+	ImGui::Text("%u x %u", Width, Height);
+	const float Size{ std::clamp(ImGui::GetContentRegionAvail().x, 1.0f, 384.0f) };
+	ImGui::Image(reinterpret_cast<ImTextureID>(Atlas->GetSRV()), ImVec2{ Size, Size }, UvMin, UvMax);
+}
 
 void FDetailsPanel::SelectComponent(UActorComponent* Component)
 {

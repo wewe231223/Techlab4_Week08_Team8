@@ -38,7 +38,7 @@ public:
 
 	void RemoveAllLights();
 	void UpdateLights(FRenderer* Renderer);
-	void GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests, const FVector& Center) const;
+	void GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests) const;
 	void GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
 
 	void AddFogInfo(uint32 Id, const FFogInfo& FogInfo);
@@ -52,6 +52,10 @@ public:
 	void MarkDirty(FPrimitiveSceneProxy* Proxy);
 	void MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy);
 
+private:
+	bool GatherShadowCasterBounds(FBox& OutBounds) const;
+
+public:
 	TArray<FPrimitiveSceneProxy*> PrimitiveSceneProxies;
 	TArray<FPrimitiveSceneProxy*> DirtyProxies;
 	TArray<FPrimitiveSceneProxy*> RenderStateDirtyProxies;

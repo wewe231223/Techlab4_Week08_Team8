@@ -11,6 +11,7 @@
 #include "Material.h"
 #include "ShadowMap.h"
 #include "ShadowMapResource.h"
+#include "Containers/Map.h"
 
 constexpr uint32 ObjectSlotBytes = 256;
 
@@ -183,6 +184,7 @@ struct FLightRenderParameters;
 struct FShadowView;
 struct FShadowMapRequest;
 class FScene;
+class ULightComponent;
 
 class FRenderer
 {
@@ -191,6 +193,7 @@ public:
 	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = DefaultShadowAtlasResolution);
 	FTexture2D* GetShadowDepthTexture() const;
 	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
+	const FShadowMapRenderParameters* GetShadowMapRenderParameters(const ULightComponent* LightComponent) const;
 
 	// 기존 단일 카메라의 ViewProjection으로 렌더 큐 전체를 그린다.
 	void RenderAll(FRenderQueue& InQueue, UCameraComponent* CameraComponent);
@@ -258,6 +261,7 @@ private:
 	FShadowMapResource mShadowMapResource{};
 	FRenderQueue mShadowRenderQueue{};
 	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
+	TMap<const ULightComponent*, int32> mShadowMapIndices{};
 	FShaderProgram* mShadowShader{};
 	TUniquePtr<FConstantBuffer> mShadowViewCB{};
 	TUniquePtr<FConstantBuffer> mShadowObjectCB{};

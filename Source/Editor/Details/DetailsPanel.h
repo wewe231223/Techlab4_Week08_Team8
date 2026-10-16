@@ -22,6 +22,7 @@ public:
 
 	void SelectComponent(UActorComponent* Component);
 	void DrawCompoenetList(AActor* SelectedActor, UActorComponent*& OutSelectedComponent);
+	void SetRenderer(FRenderer* Renderer);
 
 	const char* GetPanelName() const override { return "Details"; }
 
@@ -42,7 +43,10 @@ public:
 private:
 	void DrawSceneComponentNode(USceneComponent* Component, USceneComponent* Root, UActorComponent*& OutSelectedComponent);
 	void TryReparent(USceneComponent* DroppedComponent, USceneComponent* DragComponent);
+	void DrawShadowMap(const ULightComponent* LightComponent);
 
+private:
+	FRenderer* mRenderer{};
 	UWorld* World = nullptr;
 	ImFont* CustomFont = nullptr;
 

@@ -11,6 +11,24 @@
 
 #include <algorithm>
 
+namespace {
+	bool IsShadowCaster(const FPrimitiveSceneProxy* Proxy) {
+		if (!Proxy || !Proxy->IsVisible() || !Proxy->CastsShadows() || !Proxy->GetMesh() || !Proxy->GetRenderState()) {
+			return false;
+		}
+		const UStaticMeshComponent* Component{ Cast<UStaticMeshComponent>(Proxy->GetComponent()) };
+		if (Component && Component->IsEditorIcon()) {
+			return false;
+		}
+		for (const FCachedMeshSection& Section : Proxy->GetRenderState()->Sections) {
+			if (Section.Material && Section.Material->BlendState == EBlendState::Opaque && Section.IndexCount != 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 void FScene::AddPrimitive(UPrimitiveComponent* Component)
 {
 	if (!Component || Component->SceneProxy) return;
@@ -378,15 +396,40 @@ void FScene::MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy)
 	RenderStateDirtyProxies.Add(Proxy);
 }
 
-void FScene::GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests, const FVector& Center) const {
+void FScene::GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests) const {
 	OutRequests.Reset();
+	FBox CasterBounds{};
+	if (DirectionalLightProxies.IsEmpty() || !GatherShadowCasterBounds(CasterBounds)) {
+		return;
+	}
+
 	OutRequests.Reserve(DirectionalLightProxies.Num());
 	for (const FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies) {
 		FShadowView View{};
-		if (Proxy && Proxy->BuildShadowView(Center, View)) {
-			OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings() });
+		if (Proxy && Proxy->BuildShadowView(CasterBounds, View)) {
+			OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings(), Proxy->GetLightComponent() });
 		}
 	}
+}
+
+bool FScene::GatherShadowCasterBounds(FBox& OutBounds) const {
+	bool HasBounds{};
+	BVH.Query([](const FBox&) {
+		return true;
+	}, [&OutBounds, &HasBounds](const FPrimitiveSceneProxy* Proxy) {
+		if (!IsShadowCaster(Proxy)) {
+			return;
+		}
+		const FAABB& Bounds{ Proxy->GetBounds() };
+		const FBox CasterBounds{ Bounds.Center - Bounds.Extent, Bounds.Center + Bounds.Extent };
+		if (HasBounds) {
+			OutBounds.Expand(CasterBounds);
+		} else {
+			OutBounds = CasterBounds;
+			HasBounds = true;
+		}
+	});
+	return HasBounds;
 }
 
 void FScene::GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution) {
@@ -408,11 +451,7 @@ void FScene::GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View
 	BVH.QueryCull(FrustumAllPlanesMask, [&Frustum](const FBox& Bounds, uint32& Mask) {
 		return static_cast<EBVHCullResult>(ClassifyBoxInFrustum(Bounds, Frustum, Mask));
 	}, [&OutQueue, &LODView](FPrimitiveSceneProxy* Proxy) {
-		if (!Proxy || !Proxy->IsVisible() || !Proxy->CastsShadows() || !Proxy->GetMesh() || !Proxy->GetRenderState()) {
-			return;
-		}
-		const UStaticMeshComponent* Component{ Cast<UStaticMeshComponent>(Proxy->GetComponent()) };
-		if (Component && Component->IsEditorIcon()) {
+		if (!IsShadowCaster(Proxy)) {
 			return;
 		}
 

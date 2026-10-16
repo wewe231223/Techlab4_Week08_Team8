@@ -817,6 +817,7 @@ bool FRenderer::InitializeShadowPass() {
 
 bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution) {
 	mShadowMapReady = false;
+	mShadowMapIndices.Reset();
 	mShadowMapRenderParameters.Reset();
 	mShadowMapRenderParameters.SetNum(Requests.Num());
 	const uint32 Size{ static_cast<uint32>(std::clamp(AtlasResolution, MinShadowMapResolution, MaxShadowMapResolution)) };
@@ -852,6 +853,9 @@ bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>
 		FShadowMapRenderParameters& Parameters{ mShadowMapRenderParameters[Index] };
 		Parameters = BuildShadowMapRenderParameters(Request.mView, Request.mSettings, DepthTexture, Tile);
 		Parameters.mTextureIndex = 0;
+		if (Request.mLightComponent) {
+			mShadowMapIndices.Add(Request.mLightComponent, static_cast<int32>(Index));
+		}
 		mShadowMapReady = true;
 	}
 	RenderCommand::EndRenderPass(PassInfo);
@@ -886,4 +890,9 @@ FTexture2D* FRenderer::GetShadowDepthTexture() const {
 
 const TArray<FShadowMapRenderParameters>& FRenderer::GetShadowMapRenderParameters() const {
 	return mShadowMapRenderParameters;
+}
+
+const FShadowMapRenderParameters* FRenderer::GetShadowMapRenderParameters(const ULightComponent* LightComponent) const {
+	const int32* Index{ mShadowMapIndices.Find(LightComponent) };
+	return mShadowMapReady && Index ? &mShadowMapRenderParameters[*Index] : nullptr;
 }

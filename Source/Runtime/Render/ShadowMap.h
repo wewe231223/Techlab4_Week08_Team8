@@ -25,7 +25,6 @@ struct FShadowAtlasTile {
 struct FLightShadowSettings {
 	bool mCastShadows{ false }; // 이 조명을 그림자 생성 대상으로 사용할지 여부. 기본값은 비활성이다.
 	int32 mResolution{ 2048 }; // 정사각형 그림자 맵 한 변의 요청 해상도(텍셀). 컴포넌트에서 허용 범위로 제한한다.
-	float mDistance{ 1000.0f }; // 그림자 처리 범위를 정할 때 사용할 최대 거리(월드 단위).
 	float mDepthBias{ 0.001f }; // 자기 표면을 그림자로 오판하는 현상을 줄이기 위해 깊이 비교값에 적용할 고정 보정량.
 	float mSlopeScaledDepthBias{ 1.0f }; // 광원 시점의 깊이 기울기에 비례하는 추가 깊이 보정의 배율.
 	float mNormalBias{ 0.01f }; // 그림자 판정 위치를 표면 법선 방향으로 옮기는 보정량. 깊이값을 직접 바꾸는 보정과 구분한다.
