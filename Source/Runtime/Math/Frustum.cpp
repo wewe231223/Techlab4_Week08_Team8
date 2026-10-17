@@ -59,3 +59,65 @@ FAABB MakeWorldBounds(const FBox& Value)
     const FVector Extent = (Value.Max - Value.Min) * 0.5f;
     return { Center, Extent };
 }
+
+// 작은 행렬식을 특이행렬로 오판하지 않도록 double 부분 피벗 소거로 Grid 전용 역행렬을 구한다.
+bool TryInvertGridViewProjection(const FMatrix& Matrix, FMatrix& Inverse)
+{
+    double Augmented[4][8]{};
+    for (int Row = 0; Row < 4; ++Row)
+    {
+        for (int Column = 0; Column < 4; ++Column)
+        {
+            if (!std::isfinite(Matrix.M[Row][Column])) return false;
+            Augmented[Row][Column] = Matrix.M[Row][Column];
+        }
+        Augmented[Row][Row + 4] = 1.0;
+    }
+    for (int Column = 0; Column < 4; ++Column)
+    {
+        int PivotRow = Column;
+        for (int Row = Column + 1; Row < 4; ++Row)
+            if (std::fabs(Augmented[Row][Column]) > std::fabs(Augmented[PivotRow][Column]))
+                PivotRow = Row;
+        const double Pivot = Augmented[PivotRow][Column];
+        if (!std::isfinite(Pivot) || Pivot == 0.0) return false;
+        for (int Entry = 0; Entry < 8; ++Entry)
+            std::swap(Augmented[Column][Entry], Augmented[PivotRow][Entry]);
+        for (int Entry = 0; Entry < 8; ++Entry) Augmented[Column][Entry] /= Pivot;
+        for (int Row = 0; Row < 4; ++Row)
+        {
+            if (Row == Column) continue;
+            const double Factor = Augmented[Row][Column];
+            for (int Entry = 0; Entry < 8; ++Entry)
+                Augmented[Row][Entry] -= Factor * Augmented[Column][Entry];
+        }
+    }
+    for (int Row = 0; Row < 4; ++Row)
+        for (int Column = 0; Column < 4; ++Column)
+        {
+            const double Value = Augmented[Row][Column + 4];
+            if (!std::isfinite(Value) || std::fabs(Value) > std::numeric_limits<float>::max()) return false;
+            Inverse.M[Row][Column] = static_cast<float>(Value);
+        }
+    return true;
+}
+
+bool BuildGridFrustum(const FMatrix& ViewProj, FGridFrustum& Result)
+{
+    FMatrix Inverse;
+    if (!TryInvertGridViewProjection(ViewProj, Inverse)) return false;
+    Result.AxisExtent = FVector(1, 1, 1);
+    for (int Index = 0; Index < 8; ++Index)
+    {
+        const FVector4 H = FVector4(Index & 1 ? 1.0f : -1.0f,
+            Index & 2 ? 1.0f : -1.0f, Index & 4 ? 1.0f : 0.0f, 1.0f) * Inverse;
+        if (!std::isfinite(H.W) || std::fabs(H.W) < 1.0e-12f) return false;
+        const FVector P(H.X / H.W, H.Y / H.W, H.Z / H.W);
+        if (!std::isfinite(P.X) || !std::isfinite(P.Y) || !std::isfinite(P.Z)) return false;
+        Result.Corners[Index] = P;
+        Result.AxisExtent.X = std::max(Result.AxisExtent.X, std::fabs(P.X) + 1.0f);
+        Result.AxisExtent.Y = std::max(Result.AxisExtent.Y, std::fabs(P.Y) + 1.0f);
+        Result.AxisExtent.Z = std::max(Result.AxisExtent.Z, std::fabs(P.Z) + 1.0f);
+    }
+    return true;
+}

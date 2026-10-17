@@ -80,6 +80,7 @@ bool FRenderer::Init()
 	LightCullingCB = RenderCommand::CreateConstantBuffer(sizeof(FLightCullingConstants));
 	GridLightingCB = RenderCommand::CreateConstantBuffer(sizeof(FLightGridConstants));
 	GridLightingFallbackCB = RenderCommand::CreateConstantBuffer(sizeof(FLightGridConstants));
+	ShadowMapCB = RenderCommand::CreateConstantBuffer(sizeof(FShadowConstants));
 
 	LocalLightBuffer = RenderCommand::CreateDynamicStructuredBuffer(sizeof(FLightRenderParameters), MaxLocalLights);
 	const FLightGridConstants GridConstants{};
@@ -168,6 +169,9 @@ void FRenderer::RenderOpaque(const FMatrix& ViewProjection)
 	RenderCommand::BindShaderResource(10, LocalLightBuffer.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(12, TileIndexBuffer.get(), EShaderBindFlagBits::Pixel);
 	RenderCommand::BindConstantBuffer(5, GridLightingCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
+	if(ShadowBuffer)
+		RenderCommand::BindShaderResource(11, ShadowBuffer, EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
+	RenderCommand::BindConstantBuffer(6, ShadowMapCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 
 	DrawStaticGroups();
 	DrawPackets(0, FirstTranslucentIndex, ViewProjection);
@@ -709,4 +713,41 @@ void FRenderer::CullLights(const FMatrix& View, const FMatrix& Projection, uint3
 void FRenderer::SetLightDebugMode(uint32 Mode)
 {
 	LightDebugMode = Mode;
+}
+
+void FRenderer::DrawShadowCasters(const FRenderQueue& ShadowQueue)
+{
+	RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
+
+	for (const FRenderPacket& Packet : ShadowQueue)
+	{
+		if (!Packet.Mesh || !Packet.Material)
+			continue;
+
+		if (Packet.Material->BlendState != EBlendState::Opaque)
+			continue;
+
+		// 현재 물체의 World 행렬을 PerObjectCB에 기록한다.
+		UpdatePerObjectConstants(GetPacketWorld(Packet));
+
+		// 해당 메시가 이미 가지고 있는 VB/IB를 연결한다.
+		RenderCommand::BindMesh(Packet.Mesh, Packet.LODIndex);
+
+		const uint32 IndexCount = Packet.IndexCount != 0 ? Packet.IndexCount : Packet.Mesh->GetIndexBuffer(Packet.LODIndex)->GetIndexCount();
+
+		RenderCommand::DrawIndexed(IndexCount, Packet.StartIndex);
+	}
+
+	// 기존 렌더링 경로가 메시/재질을 다시 연결하도록 한다.
+	LastMesh = nullptr;
+	LastMaterial = nullptr;
+}
+
+void FRenderer::SetShadowBuffer(FTexture2D* InShadowBuffer, const FMatrix& InLightViewProjection)
+{
+	ShadowBuffer = InShadowBuffer;
+	FShadowConstants Constants{};
+	Constants.ViewProjection = InLightViewProjection;
+
+	RenderCommand::UpdateBufferData(ShadowMapCB.get(), &Constants);
 }

@@ -111,12 +111,20 @@ cbuffer LightGrid : register(b5)
     uint2 LightGridPadding;
 };
 
+cbuffer ShadowMap : register(b6)
+{
+    matrix LightViewProj;
+};
+
+
 StructuredBuffer<FLightRenderParameters> LocalLights : register(t10);
 // 셀마다 [개수][라이트 번호 x MAX_LIGHTS_PER_CELL] 형태로 CELL_STRIDE칸씩 이어져 있다.
 StructuredBuffer<uint> CellLightIndices : register(t12);
 
 Texture2D DiffuseTexture : register(t0);
 Texture2D NormalTexture : register(t1);
+Texture2D ShadowMap : register(t11);
+
 SamplerState MaterialSampler : register(s0);
 
 struct VS_INPUT
@@ -416,6 +424,20 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
     DiffuseLighting += Input.VertexDiffuse;
 #endif
 
-    return float4(Albedo.rgb * DiffuseLighting + SpecularLighting, Alpha);
+    float4 LightClip = mul(float4(Input.WorldPos, 1.0f), LightViewProj);
+    float3 LightNDC = LightClip.xyz / LightClip.w;
+    float2 ShadowUV = LightNDC.xy * float2(0.5f, -0.5f) + 0.5f;
+
+    float CurrentDepth = LightNDC.z;
+    float ShadowMapDepth = ShadowMap.Sample(MaterialSampler, ShadowUV).r;
+    float Shadow = 1.0f;
+
+    if (all(ShadowUV >= 0.0f) && all(ShadowUV <= 1.0f) && LightNDC.z >= 0.0f && LightNDC.z <= 1.0f)
+    {
+        if (CurrentDepth >= ShadowMapDepth + 0.00001f)
+            Shadow = 0.0f;
+    }
+
+    return float4((Albedo.rgb * DiffuseLighting + SpecularLighting) * Shadow, Alpha);
 #endif
 }

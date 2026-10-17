@@ -15,7 +15,7 @@
 #include "Render/FXAARenderer.h"
 #include "Render/ToneMapRenderer.h"
 #include "Render/DepthViewRenderer.h"
-
+#include "Render/ShadowRenderer.h"
 
 #include "Editor/EditorUI/EditorUI.h"
 #include "Editor/OutputLog/OutputLogPanel.h"
@@ -118,7 +118,8 @@ private:
 	void RenderNormalPass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward);
 	//ToneMap Pass
 	void RenderToneMapPass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo);
-
+	//ShadowMap Pass
+	void RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection);
 	//Icon Pass
 	void RenderIconPass(int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderIconQueue, FRenderQueue& ArrowQueue);
 
@@ -150,6 +151,7 @@ private:
 	TUniquePtr<FFXAARenderer> FXAARenderer;
 	TUniquePtr<FToneMapRenderer> ToneMapRenderer;
 	TUniquePtr<FDepthViewRenderer> DepthViewRenderer;
+	TUniquePtr<FShadowRenderer> ShadowRenderer;
 
 	UFont* SystemFont;
 
@@ -161,6 +163,7 @@ private:
 	FViewportsPanel* ViewportsPanel = nullptr;
 	FMultipleViewportsAdapter MultipleViewportsAdapter;
 	FRenderQueue RenderQueue;
+	FRenderQueue ShadowQueue;
 	FRenderQueue IconQueue;		// Light Icon Queue
 	FRenderQueue ArrowQueue;
 	FOutlinerPanel* OutlinerPanel = nullptr;

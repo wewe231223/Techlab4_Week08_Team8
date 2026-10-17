@@ -109,6 +109,8 @@ public:
 
     // View별 가시 ID를 엔진 컴포넌트로 역매핑해 렌더 큐를 구성한다.
     void BuildRenderQueue(int32 ViewIndex, FRenderQueue& OutQueue, FRenderQueue& OutIconQueue, FRenderQueue& OutArrowQueue);
+    void BuildShadowRenderQueue(const FFrustumPlanes& LightFrustum, FRenderQueue& OutShadowQueue);
+
     // 활성 View Ray를 World·Component 피킹으로 전달하고 마지막 결과를 보관한다.
     FPickHit PickActiveView(FVector2 LocalMousePosition, UWorld& World);
     // 마지막 Hit Component의 Owner를 찾아 Outliner 선택에 반영한다.
@@ -176,6 +178,7 @@ private:
     TArray<FParticleSortInput> SortInputs;
     TArray<ObjectId> SortedParticleIds;
     TArray<ObjectId> VisibleIds[MaxViewCount];
+    TArray<ObjectId> ShadowVisibleIds;
     TArray<UStaticMeshComponent*> PendingStaticMeshes;
     TArray<FLODSelectionInput> LODInputs;
     TArray<uint8> SelectedLODs;

@@ -10,6 +10,8 @@
 #include "RenderEnums.h"
 #include "Material.h"
 
+#include "ShadowRenderer.h"
+
 constexpr uint32 ObjectSlotBytes = 256;
 
 enum class ELightCullingMode : uint32 { Tiled, Clustered, Tiled25D };
@@ -207,6 +209,9 @@ public:
 	// CameraWorldPos는 ViewProjection과 함께 b0에 올라가 Specular 계산(V 벡터)에 쓰인다.
 	void RenderQueueSorting(FRenderQueue& InQueue, const FMatrix& ViewProjection, const FVector& CameraWorldPos);
 
+	// 셰도우 렌더링시 물체의 World 행렬 상수 버퍼를 재계산하는게 아니라 가져와서 사용할 수 있도록 한다.
+	void DrawShadowCasters(const FRenderQueue& ShadowQueue);
+
 	// Depth Prepass: 불투명만 PS 없이 그려 깊이 버퍼를 채운다. RenderQueueSorting 뒤, RenderOpaque 전에 부른다.
 	// 같은 VS·행렬이라 깊이가 비트 단위로 같으므로 본 패스는 LESS_EQUAL로 통과한다.
 	void RenderDepth(const FMatrix& ViewProjection);
@@ -225,6 +230,8 @@ public:
 	// 이후 그리는 UberLit 머티리얼이 쓸 조명 모델. View마다 RenderOpaque 전에 설정한다.
 	void SetViewMode(EViewMode InViewMode);
 	EViewMode GetViewMode() const { return CurrentViewMode; }
+
+	void SetShadowBuffer(FTexture2D* InShadowBuffer, const FMatrix& InLightViewProjection);
 
 	// DepthTexture는 Tiled25D에서만 쓴다. 이때는 DSV에서 풀린 상태(RenderDepth 뒤 EndRenderPass)여야 한다.
 	void CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture2D* DepthTexture = nullptr);
@@ -290,6 +297,9 @@ private:
 	TUniquePtr<FStructuredBuffer> TileIndexBuffer{};
 	TUniquePtr<FStructuredBuffer> LocalLightBuffer{};
 	uint32 NumLocalLightsThisFrame = 0;
+
+	FTexture2D* ShadowBuffer = nullptr;
+	TUniquePtr<FConstantBuffer> ShadowMapCB;
 
 	EViewMode CurrentViewMode = EViewMode::Lit_Lambert;
 };

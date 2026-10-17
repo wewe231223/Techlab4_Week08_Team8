@@ -830,3 +830,36 @@ FMatrix FMultipleViewportsAdapter::GetEngineProjection(int32 ViewIndex) const
 	assert(IsViewActive(ViewIndex));
 	return PrepareView(ViewIndex).EngineProjection;
 }
+
+void FMultipleViewportsAdapter::BuildShadowRenderQueue(const FFrustumPlanes& LightFrustum,FRenderQueue& OutShadowQueue)
+{
+	OutShadowQueue.Reset();
+
+	// CaptureWorld에서 수집한 공통 후보에 빛 기준 컬링을 적용한다.
+	CullForView(RenderObjects, LightFrustum, ShadowVisibleIds);
+
+	for (const ObjectId Id : ShadowVisibleIds)
+	{
+		const auto* Snapshot = PrimitiveById.Find(Id);
+		if (!Snapshot || !Snapshot->Primitive)
+			continue;
+
+		UStaticMeshComponent* StaticComponent = Cast<UStaticMeshComponent>(Snapshot->Primitive);
+
+		if (!StaticComponent)
+			continue;
+
+		if (!StaticComponent->IsVisible() ||!StaticComponent->CastsShadow() || StaticComponent->IsEditorIcon())
+		{
+			continue;
+		}
+
+		if (!StaticComponent->GetStaticMesh())
+			continue;
+
+		// 기존 제출 경로를 재사용한다.
+		// Proxy, Mesh, Material, Section의 인덱스 범위가 패킷에 기록된다.
+		constexpr uint32 ShadowLODIndex = 0;
+		StaticComponent->SubmitToRenderQueue(OutShadowQueue, ShadowLODIndex);
+	}
+}

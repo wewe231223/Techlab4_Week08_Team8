@@ -5,11 +5,14 @@
 struct FPlane { FVector Normal; float Distance; };
 struct FFrustumPlanes { FPlane Planes[6]; };
 struct FAABB { FVector Center; FVector Extent; };
+struct FGridFrustum { FVector Corners[8]; FVector AxisExtent; };
+
 
 static FPlane NormalizePlane(const FPlane Plane);
 FFrustumPlanes ExtractFrustumPlanes(const FMatrix& Matrix);
 bool IsAABBInFrustum(const FAABB& Bounds, const FFrustumPlanes& Frustum);
 FAABB MakeWorldBounds(const FBox& Value);
+bool BuildGridFrustum(const FMatrix& ViewProj, FGridFrustum& Result);
 
 enum class EFrustumTest : uint8 { Outside, Intersect, Inside };
 
