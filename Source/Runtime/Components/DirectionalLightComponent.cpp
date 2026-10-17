@@ -3,9 +3,8 @@
 
 #include "Engine/DirectionalLightSceneProxy.h"
 
-UDirectionalLightComponent::UDirectionalLightComponent()
-{
-
+UDirectionalLightComponent::UDirectionalLightComponent() {
+	SetShadowMapResolution(DefaultDirectionalShadowMapResolution);
 }
 
 UDirectionalLightComponent::~UDirectionalLightComponent()

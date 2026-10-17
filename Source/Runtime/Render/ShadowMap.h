@@ -12,10 +12,12 @@
 constexpr int32 InvalidShadowMapIndex{ -1 };
 constexpr int32 MinShadowMapResolution{ 128 };
 constexpr int32 MaxShadowMapResolution{ 2048 };
+constexpr int32 DefaultShadowMapResolution{ 512 };
+constexpr int32 DefaultDirectionalShadowMapResolution{ 2048 };
 constexpr uint32 ShadowMapTextureSlot{ 13 };
 constexpr uint32 ShadowMapBufferSlot{ 14 };
 constexpr uint32 ShadowMapSamplerSlot{ 1 };
-constexpr int32 DefaultShadowAtlasResolution{ 4096 };
+constexpr int32 DefaultShadowAtlasResolution{ 8192 };
 constexpr int32 MaxShadowAtlasResolution{ 8192 };
 
 int32 NormalizeShadowMapResolution(int32 Resolution);
@@ -66,7 +68,7 @@ struct FShadowAtlasTile {
 // 조명 컴포넌트에서 수집하는 그림자 생성 요청 설정. 실제 맵 생성과 샘플링은 그림자 렌더 패스에서 처리한다.
 struct FLightShadowSettings {
 	bool mCastShadows{ false }; // 이 조명을 그림자 생성 대상으로 사용할지 여부. 기본값은 비활성이다.
-	int32 mResolution{ 2048 }; // 정사각형 그림자 맵 한 변의 요청 해상도(텍셀). 컴포넌트에서 허용 범위로 제한한다.
+	int32 mResolution{ DefaultShadowMapResolution }; // 정사각형 그림자 맵 한 변의 요청 해상도(텍셀). 컴포넌트에서 허용 범위로 제한한다.
 	EShadowDepthBiasPreset mDepthBiasPreset{ EShadowDepthBiasPreset::Medium };
 	EShadowSlopeScaledDepthBiasPreset mSlopeScaledDepthBiasPreset{ EShadowSlopeScaledDepthBiasPreset::Medium };
 	float mNormalBias{ 0.01f }; // 그림자 판정 위치를 표면 법선 방향으로 옮기는 보정량. 깊이값을 직접 바꾸는 보정과 구분한다.

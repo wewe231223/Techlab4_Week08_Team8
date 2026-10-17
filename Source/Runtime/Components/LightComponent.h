@@ -41,7 +41,7 @@ protected:
 private:
 	// 리플렉션에 등록되어 Details 편집과 장면 저장의 대상이 된다. GetShadowSettings로 렌더러용 설정을 수집한다.
 	bool mCastShadows{ false }; // 조명의 그림자 생성 요청 여부. 실제 그림자 맵 할당 여부와는 별개이다.
-	int32 mShadowMapResolution{ 2048 }; // 그림자 맵 한 변의 요청 해상도(텍셀).
+	int32 mShadowMapResolution{ DefaultShadowMapResolution }; // 그림자 맵 한 변의 요청 해상도(텍셀).
 	int32 mShadowDepthBiasPreset{ static_cast<int32>(EShadowDepthBiasPreset::Medium) };
 	int32 mShadowSlopeScaledDepthBiasPreset{ static_cast<int32>(EShadowSlopeScaledDepthBiasPreset::Medium) };
 	float mShadowNormalBias{ 0.01f }; // 표면 법선 방향으로 그림자 판정 위치를 옮기는 보정량.
