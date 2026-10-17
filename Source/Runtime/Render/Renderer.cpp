@@ -35,16 +35,9 @@ namespace
 
 	constexpr uint32 MinPerObjectSlots = 1024;
 
-	struct FShadowAtlasFreeRect {
-		uint32 mX{};
-		uint32 mY{};
-		uint32 mWidth{};
-		uint32 mHeight{};
-	};
-
 	bool IsValidShadowRequest(const FShadowMapRequest& Request) {
 		const FShadowView& View{ Request.mView };
-		if (!Request.mSettings.mCastShadows || !std::isfinite(Request.mSettings.mSlopeScaledDepthBias) || Request.mSettings.mSlopeScaledDepthBias < 0.0f || !std::isfinite(View.mNearPlane) || !std::isfinite(View.mFarPlane) || View.mNearPlane < 0.0f || View.mFarPlane <= View.mNearPlane || !std::isfinite(View.mWorldPosition.X) || !std::isfinite(View.mWorldPosition.Y) || !std::isfinite(View.mWorldPosition.Z)) {
+		if (!Request.mSettings.mCastShadows || !std::isfinite(View.mNearPlane) || !std::isfinite(View.mFarPlane) || View.mNearPlane < 0.0f || View.mFarPlane <= View.mNearPlane || !std::isfinite(View.mWorldPosition.X) || !std::isfinite(View.mWorldPosition.Y) || !std::isfinite(View.mWorldPosition.Z)) {
 			return false;
 		}
 		for (const FMatrix* Matrix : { &View.mView, &View.mProjection, &View.mViewProjection }) {
@@ -81,40 +74,38 @@ namespace
 			}
 		}
 		std::sort(SortedIndices.begin(), SortedIndices.end(), [&Requests](uint32 Left, uint32 Right) {
-			const int32 LeftResolution{ std::clamp(Requests[Left].mSettings.mResolution, MinShadowMapResolution, MaxShadowMapResolution) };
-			const int32 RightResolution{ std::clamp(Requests[Right].mSettings.mResolution, MinShadowMapResolution, MaxShadowMapResolution) };
+			const int32 LeftResolution{ NormalizeShadowMapResolution(Requests[Left].mSettings.mResolution) };
+			const int32 RightResolution{ NormalizeShadowMapResolution(Requests[Right].mSettings.mResolution) };
 			return LeftResolution != RightResolution ? LeftResolution > RightResolution : Left < Right;
 		});
 
-		TArray<FShadowAtlasFreeRect> FreeRects{};
-		FreeRects.Add(FShadowAtlasFreeRect{ 0, 0, AtlasResolution, AtlasResolution });
+		constexpr int32 LevelCount{ static_cast<int32>(std::bit_width(static_cast<uint32>(MaxShadowAtlasResolution / MinShadowMapResolution))) };
+		TArray<FShadowAtlasTile> FreeTilesByLevel[LevelCount]{};
+		FreeTilesByLevel[0].Add(FShadowAtlasTile{ 0, 0, AtlasResolution });
 		for (uint32 Index : SortedIndices) {
-			const uint32 Resolution{ static_cast<uint32>(std::clamp(Requests[Index].mSettings.mResolution, MinShadowMapResolution, MaxShadowMapResolution)) };
-			int32 BestIndex{ InvalidShadowMapIndex };
-			uint64 BestArea{};
-			for (uint32 RectIndex{}; RectIndex < static_cast<uint32>(FreeRects.Num()); ++RectIndex) {
-				const FShadowAtlasFreeRect& Rect{ FreeRects[RectIndex] };
-				const uint64 Area{ static_cast<uint64>(Rect.mWidth) * Rect.mHeight };
-				if (Resolution <= Rect.mWidth && Resolution <= Rect.mHeight && (BestIndex == InvalidShadowMapIndex || Area < BestArea)) {
-					BestIndex = static_cast<int32>(RectIndex);
-					BestArea = Area;
-				}
+			const uint32 Resolution{ static_cast<uint32>(NormalizeShadowMapResolution(Requests[Index].mSettings.mResolution)) };
+			if (Resolution > AtlasResolution) {
+				continue;
 			}
-			if (BestIndex == InvalidShadowMapIndex) {
+			const int32 TargetLevel{ static_cast<int32>(std::countr_zero(AtlasResolution / Resolution)) };
+			int32 AvailableLevel{ TargetLevel };
+			while (AvailableLevel >= 0 && FreeTilesByLevel[AvailableLevel].IsEmpty()) {
+				--AvailableLevel;
+			}
+			if (AvailableLevel < 0) {
 				continue;
 			}
 
-			const FShadowAtlasFreeRect Rect{ FreeRects[BestIndex] };
-			FreeRects.RemoveAtSwap(BestIndex);
-			Tiles[Index] = FShadowAtlasTile{ Rect.mX, Rect.mY, Resolution };
-			const uint32 RemainingWidth{ Rect.mWidth - Resolution };
-			const uint32 RemainingHeight{ Rect.mHeight - Resolution };
-			if (RemainingWidth > 0) {
-				FreeRects.Add(FShadowAtlasFreeRect{ Rect.mX + Resolution, Rect.mY, RemainingWidth, RemainingWidth > RemainingHeight ? Rect.mHeight : Resolution });
+			FShadowAtlasTile Tile{ FreeTilesByLevel[AvailableLevel].Last() };
+			FreeTilesByLevel[AvailableLevel].RemoveLast();
+			while (AvailableLevel < TargetLevel) {
+				Tile.mResolution /= 2;
+				++AvailableLevel;
+				FreeTilesByLevel[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY + Tile.mResolution, Tile.mResolution });
+				FreeTilesByLevel[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX, Tile.mY + Tile.mResolution, Tile.mResolution });
+				FreeTilesByLevel[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY, Tile.mResolution });
 			}
-			if (RemainingHeight > 0) {
-				FreeRects.Add(FShadowAtlasFreeRect{ Rect.mX, Rect.mY + Resolution, RemainingWidth > RemainingHeight ? Resolution : Rect.mWidth, RemainingHeight });
-			}
+			Tiles[Index] = Tile;
 		}
 		return Tiles;
 	}
@@ -841,7 +832,7 @@ bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>
 	mShadowMapIndices.Reset();
 	mShadowMapRenderParameters.Reset();
 	mShadowMapRenderParameters.SetNum(Requests.Num());
-	const uint32 Size{ static_cast<uint32>(std::clamp(AtlasResolution, MinShadowMapResolution, MaxShadowMapResolution)) };
+	const uint32 Size{ static_cast<uint32>(NormalizeShadowAtlasResolution(AtlasResolution)) };
 	const TArray<FShadowAtlasTile> Tiles{ BuildShadowAtlasTiles(Requests, Size) };
 	uint32 TileCount{};
 	for (const FShadowAtlasTile& Tile : Tiles) {
@@ -874,7 +865,7 @@ bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>
 	for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
 		const FShadowAtlasTile& Tile{ Tiles[Index] };
 		const FShadowMapRequest& Request{ Requests[Index] };
-		if (Tile.mResolution == 0 || !RenderCommand::SetShadowRasterizerState(Request.mSettings.mSlopeScaledDepthBias)) {
+		if (Tile.mResolution == 0 || !RenderCommand::SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset)) {
 			continue;
 		}
 		DrawShadowCasters(Scene, Request.mView, Tile);

@@ -51,7 +51,7 @@ bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& Caste
 		}
 	}
 
-	const float BorderScale{ 1.0f + 2.0f / static_cast<float>(std::clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution)) };
+	const float BorderScale{ 1.0f + 2.0f / static_cast<float>(NormalizeShadowMapResolution(Resolution)) };
 	const float Width{ std::max(Maximum.Y - Minimum.Y, 0.01f) * BorderScale };
 	const float Height{ std::max(Maximum.Z - Minimum.Z, 0.01f) * BorderScale };
 	constexpr float NearPlane{ 0.01f };
@@ -153,7 +153,6 @@ FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& Vie
 	Parameters.mLightViewProjection = View.mViewProjection;
 	Parameters.mTexelSize = FVector2{ 1.0f / static_cast<float>(DepthTexture->GetWidth()), 1.0f / static_cast<float>(DepthTexture->GetHeight()) };
 	Parameters.mUvScaleBias = FVector4{ static_cast<float>(Tile.mResolution) * Parameters.mTexelSize.X, static_cast<float>(Tile.mResolution) * Parameters.mTexelSize.Y, static_cast<float>(Tile.mX) * Parameters.mTexelSize.X, static_cast<float>(Tile.mY) * Parameters.mTexelSize.Y };
-	Parameters.mDepthBias = std::isfinite(Settings.mDepthBias) ? std::max(Settings.mDepthBias, 0.0f) : FLightShadowSettings{}.mDepthBias;
 	Parameters.mNormalBias = std::isfinite(Settings.mNormalBias) ? std::max(Settings.mNormalBias, 0.0f) : FLightShadowSettings{}.mNormalBias;
 	return Parameters;
 }

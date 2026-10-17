@@ -9,7 +9,7 @@ struct FShadowMapRenderParameters {
     row_major float4x4 mLightViewProjection; // 월드 위치를 광원 클립 공간으로 변환한다. mul(WorldPosition, Matrix) 순서로 사용한다.
     float4 mUvScaleBias; // 아틀라스 UV = 0~1 그림자 UV * XY + ZW. XY는 크기, ZW는 시작 위치이다.
     float2 mTexelSize; // 최종 샘플링 텍스처의 { 1 / Width, 1 / Height }. PCF에서 한 텍셀 단위로 이동할 때 사용한다.
-    float mDepthBias; // 깊이 비교값의 고정 보정량.
+    float mDepthPadding;
     float mNormalBias; // 그림자 판정 위치의 법선 방향 보정량.
     int mTextureIndex; // 그림자 텍스처 리소스의 인덱스. -1은 미할당이다.
     uint mArraySlice; // 선택한 텍스처 배열 내부의 층 번호. 단일 2D 텍스처에서는 0이다.

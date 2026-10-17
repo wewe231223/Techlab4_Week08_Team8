@@ -4,8 +4,6 @@
 #include "RenderCommand.h"
 #include "Texture2D.h"
 
-#include <algorithm>
-
 FShadowMapResource::FShadowMapResource() {
 }
 
@@ -17,7 +15,7 @@ FShadowMapResource::FShadowMapResource(FShadowMapResource&&) noexcept = default;
 FShadowMapResource& FShadowMapResource::operator=(FShadowMapResource&&) noexcept = default;
 
 bool FShadowMapResource::Initialize(int32 Resolution) {
-	const uint32 Size{ static_cast<uint32>(std::clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution)) };
+	const uint32 Size{ static_cast<uint32>(NormalizeShadowAtlasResolution(Resolution)) };
 	if (IsValid() && mDepthTexture->GetWidth() == Size && mDepthTexture->GetHeight() == Size) {
 		return true;
 	}

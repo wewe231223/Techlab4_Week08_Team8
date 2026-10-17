@@ -181,7 +181,7 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     }
 
     const float2 ShadowUv = { LightPosition.xy * float2(0.5f, -0.5f) + 0.5f };
-    const float ComparisonDepth = { min(LightPosition.z - Parameters.mDepthBias, 1.0f) };
+    const float ComparisonDepth = { LightPosition.z };
 #if SHADOW_PCF
     const float2 ShadowTexelSize = { Parameters.mTexelSize / Parameters.mUvScaleBias.xy };
     float Visibility = { 0.0f };

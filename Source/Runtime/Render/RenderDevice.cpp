@@ -7,8 +7,6 @@
 #include "PipelineState.h"
 #include "DDSTextureLoader11.h"
 
-#include <cmath>
-
 FRenderDevice::FRenderDevice()
 {
 	uint32 CreationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -61,33 +59,67 @@ FRenderDevice::FRenderDevice()
 	DXGIAdapter->GetParent(IID_PPV_ARGS(DXGIFactory.GetAddressOf()));
 
 	CreateStates();
+	CreateShadowRasterizerStates();
 }
 
 FRenderDevice::~FRenderDevice()
 {
 }
 
-ID3D11RasterizerState* FRenderDevice::GetShadowRasterizerState(float SlopeScaledDepthBias) {
-	if (!Device || !std::isfinite(SlopeScaledDepthBias) || SlopeScaledDepthBias < 0.0f) {
-		return nullptr;
-	}
+ID3D11Device* FRenderDevice::GetDevice() const {
+	return Device.Get();
+}
 
-	const auto Found{ mShadowRasterizerStates.find(SlopeScaledDepthBias) };
-	if (Found != mShadowRasterizerStates.end()) {
-		return Found->second.Get();
-	}
+ID3D11DeviceContext* FRenderDevice::GetContext() const {
+	return DeviceContext.Get();
+}
 
-	D3D11_RASTERIZER_DESC Desc{};
-	Desc.FillMode = D3D11_FILL_SOLID;
-	Desc.CullMode = D3D11_CULL_BACK;
-	Desc.DepthClipEnable = TRUE;
-	Desc.SlopeScaledDepthBias = SlopeScaledDepthBias;
-	Microsoft::WRL::ComPtr<ID3D11RasterizerState> State{};
-	if (FAILED(Device->CreateRasterizerState(&Desc, State.GetAddressOf()))) {
-		return nullptr;
-	}
+ID3D11DeviceContext1* FRenderDevice::GetContext1() const {
+	return bConstantBufferOffsetting ? DeviceContext1.Get() : nullptr;
+}
 
-	return mShadowRasterizerStates.emplace(SlopeScaledDepthBias, std::move(State)).first->second.Get();
+IDXGIFactory* FRenderDevice::GetFactory() const {
+	return DXGIFactory.Get();
+}
+
+ID3D11RasterizerState* FRenderDevice::GetRasterizerState(ERasterizerState State) const {
+	return RasterizerStates[static_cast<uint8>(State)].Get();
+}
+
+ID3D11DepthStencilState* FRenderDevice::GetDepthStencilState(EDepthStencilState State) const {
+	return DepthStencilStates[static_cast<uint8>(State)].Get();
+}
+
+ID3D11BlendState* FRenderDevice::GetBlendState(EBlendState State) const {
+	return BlendStates[static_cast<uint8>(State)].Get();
+}
+
+ID3D11SamplerState* FRenderDevice::GetSamplerState(ESamplerState State) const {
+	return SamplerStates[static_cast<uint8>(State)].Get();
+}
+
+ID3D11RasterizerState* FRenderDevice::GetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) const {
+	const int32 DepthIndex{ static_cast<int32>(NormalizeShadowDepthBiasPreset(static_cast<int32>(DepthBiasPreset))) };
+	const int32 SlopeIndex{ static_cast<int32>(NormalizeShadowSlopeScaledDepthBiasPreset(static_cast<int32>(SlopeScaledDepthBiasPreset))) };
+	return mShadowRasterizerStates[DepthIndex][SlopeIndex].Get();
+}
+
+void FRenderDevice::CreateShadowRasterizerStates() {
+	for (int32 DepthIndex{}; DepthIndex < ShadowDepthBiasPresetCount; ++DepthIndex) {
+		const FShadowDepthBiasPreset& DepthPreset{ GetShadowDepthBiasPreset(static_cast<EShadowDepthBiasPreset>(DepthIndex)) };
+		for (int32 SlopeIndex{}; SlopeIndex < ShadowSlopeScaledDepthBiasPresetCount; ++SlopeIndex) {
+			const FShadowSlopeScaledDepthBiasPreset& SlopePreset{ GetShadowSlopeScaledDepthBiasPreset(static_cast<EShadowSlopeScaledDepthBiasPreset>(SlopeIndex)) };
+			D3D11_RASTERIZER_DESC Desc{};
+			Desc.FillMode = D3D11_FILL_SOLID;
+			Desc.CullMode = D3D11_CULL_BACK;
+			Desc.DepthClipEnable = TRUE;
+			Desc.DepthBias = DepthPreset.mDepthBias;
+			Desc.SlopeScaledDepthBias = SlopePreset.mSlopeScaledDepthBias;
+			if (FAILED(Device->CreateRasterizerState(&Desc, mShadowRasterizerStates[DepthIndex][SlopeIndex].GetAddressOf()))) {
+				HTR_LOG(Error, "Failed to create shadow rasterizer presets '{} / {}'", DepthPreset.mName, SlopePreset.mName);
+			}
+		}
+	}
 }
 
 

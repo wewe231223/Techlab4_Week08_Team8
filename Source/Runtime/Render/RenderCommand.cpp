@@ -14,6 +14,18 @@ void RenderCommand::Init(FRenderDevice* InRenderDevice)
 	RenderDevice = InRenderDevice;
 }
 
+void RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY Topology) {
+	RenderDevice->GetContext()->IASetPrimitiveTopology(Topology);
+}
+
+ID3D11Device* RenderCommand::GetDevice() {
+	return RenderDevice->GetDevice();
+}
+
+ID3D11DeviceContext* RenderCommand::GetContext() {
+	return RenderDevice->GetContext();
+}
+
 TUniquePtr<FVertexBuffer> RenderCommand::CreateStaticVertexBuffer(const void* InVertices, uint32 InSize, uint32 Stride)
 {
 	assert(RenderDevice);
@@ -290,8 +302,8 @@ void RenderCommand::SetRasterizerState(ERasterizerState State)
 	RenderDevice->GetContext()->RSSetState(RenderDevice->GetRasterizerState(State));
 }
 
-bool RenderCommand::SetShadowRasterizerState(float SlopeScaledDepthBias) {
-	ID3D11RasterizerState* State{ RenderDevice->GetShadowRasterizerState(SlopeScaledDepthBias) };
+bool RenderCommand::SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) {
+	ID3D11RasterizerState* State{ RenderDevice->GetShadowRasterizerState(DepthBiasPreset, SlopeScaledDepthBiasPreset) };
 	if (!State) {
 		return false;
 	}
@@ -355,8 +367,7 @@ void RenderCommand::BindShaderResource(uint32 Slot, FStructuredBuffer* Structure
 	BindShaderResource(Slot, SRV, FlagBits);
 }
 
-inline void RenderCommand::BindShaderResource(uint32 Slot, ID3D11ShaderResourceView* SRV, EShaderBindFlagBits FlagBits)
-{
+void RenderCommand::BindShaderResource(uint32 Slot, ID3D11ShaderResourceView* SRV, EShaderBindFlagBits FlagBits) {
 	if (HasFlag(FlagBits, EShaderBindFlagBits::Vertex))
 	{
 		RenderDevice->GetContext()->VSSetShaderResources(Slot, 1, &SRV);

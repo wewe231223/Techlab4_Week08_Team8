@@ -2,9 +2,8 @@
 
 #include <d3d11_1.h>
 #include "RenderStates.h"
+#include "ShadowMap.h"
 #include "Core/EngineString.h"
-
-#include <unordered_map>
 
 class FVertexBuffer;
 class FShader;
@@ -22,17 +21,17 @@ class FTextureCube;
 struct FPipelineState;
 
 // Device, DeviceContext
-class FRenderDevice
-{
+class FRenderDevice {
 public:
 	FRenderDevice();
 	~FRenderDevice();
 
-	ID3D11Device* GetDevice() const { return Device.Get(); }
-	ID3D11DeviceContext* GetContext() const { return DeviceContext.Get(); }
+public:
+	ID3D11Device* GetDevice() const;
+	ID3D11DeviceContext* GetContext() const;
 	// D3D11.1 상수 버퍼 오프셋 바인딩(VSSetConstantBuffers1)을 지원하지 않으면 nullptr
-	ID3D11DeviceContext1* GetContext1() const { return bConstantBufferOffsetting ? DeviceContext1.Get() : nullptr; }
-	IDXGIFactory* GetFactory() const { return DXGIFactory.Get(); }
+	ID3D11DeviceContext1* GetContext1() const;
+	IDXGIFactory* GetFactory() const;
 
 	TUniquePtr<FVertexBuffer> CreateStaticVertexBuffer(const void* InVertices, uint32 InSize, uint32 Stride);
 	TUniquePtr<FIndexBuffer> CreateStaticIndexBuffer(const uint32* InIndices, uint32 MaxIndexCount);
@@ -56,16 +55,18 @@ public:
 
 	TUniquePtr<FShaderProgram> CreateShader(const wchar_t* FileName, D3D11_INPUT_ELEMENT_DESC* InLayoutDesc, size_t InLayoutSize);
 
-	inline ID3D11RasterizerState* GetRasterizerState(ERasterizerState State) const { return RasterizerStates[(uint8)State].Get(); }
-	ID3D11RasterizerState* GetShadowRasterizerState(float SlopeScaledDepthBias);
-	inline ID3D11DepthStencilState* GetDepthStencilState(EDepthStencilState State) const { return DepthStencilStates[(uint8)State].Get(); }
-	inline ID3D11BlendState* GetBlendState(EBlendState State) const { return BlendStates[(uint8)State].Get(); }
-	inline ID3D11SamplerState* GetSamplerState(ESamplerState State) const { return SamplerStates[(uint8)State].Get(); }
+	ID3D11RasterizerState* GetRasterizerState(ERasterizerState State) const;
+	ID3D11RasterizerState* GetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) const;
+	ID3D11DepthStencilState* GetDepthStencilState(EDepthStencilState State) const;
+	ID3D11BlendState* GetBlendState(EBlendState State) const;
+	ID3D11SamplerState* GetSamplerState(ESamplerState State) const;
 
 	void Shutdown();
 private:
 	void CreateStates();
+	void CreateShadowRasterizerStates();
 
+private:
 	ComPtr<ID3D11Device> Device;
 	ComPtr<ID3D11DeviceContext> DeviceContext;
 	ComPtr<ID3D11DeviceContext1> DeviceContext1;
@@ -78,5 +79,5 @@ private:
 	ComPtr<ID3D11DepthStencilState> DepthStencilStates[(uint8)EDepthStencilState::Count];
 	ComPtr<ID3D11BlendState>        BlendStates[(uint8)EBlendState::Count];
 	ComPtr<ID3D11SamplerState>      SamplerStates[(uint8)ESamplerState::Count];
-	std::unordered_map<float, Microsoft::WRL::ComPtr<ID3D11RasterizerState>> mShadowRasterizerStates{};
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mShadowRasterizerStates[ShadowDepthBiasPresetCount][ShadowSlopeScaledDepthBiasPresetCount]{};
 };

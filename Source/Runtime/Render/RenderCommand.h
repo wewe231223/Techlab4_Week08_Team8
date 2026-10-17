@@ -24,8 +24,7 @@ enum class EShaderBindFlagBits : uint32
 
 DEFINE_ENUM_OPERATORS(EShaderBindFlagBits);
 
-class RenderCommand
-{
+class RenderCommand {
 public:
 	static void Init(FRenderDevice* InRenderDevice);
 
@@ -61,10 +60,7 @@ public:
 	static void DrawInstance(uint32 IndexCount, uint32 StartIndexLocation = 0, int32 BaseVertexLocation = 0);
 
 	template <typename T>
-	static void UpdateBufferData(FBuffer* InBuffer, T* Data)
-	{
-		UpdateBufferData(InBuffer, Data, sizeof(T));
-	}
+	static void UpdateBufferData(FBuffer* InBuffer, T* Data);
 	static void UpdateBufferData(FBuffer* InBuffer, const void* Data, uint32 DataSize);
 
 	static void BindVertexBuffer(FVertexBuffer* VertexBuffer);
@@ -95,7 +91,7 @@ public:
 	static void SetViewport(uint32 InX, uint32 InY, uint32 InWidth, uint32 InHeight);
 
 	static void SetRasterizerState(ERasterizerState State);
-	static bool SetShadowRasterizerState(float SlopeScaledDepthBias);
+	static bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset);
 	static void SetBlendState(EBlendState State);
 	static void SetDepthStencilState(EDepthStencilState State);
 	static void BindSamplerState(uint32 Slot, ESamplerState SamplerState, EShaderBindFlagBits FlagBits);
@@ -106,14 +102,11 @@ public:
 	static void BindUnorderedAccess(uint32 Slot, FStructuredBuffer* StructuredBuffer);
 	static void UnbindUnorderedAccess(uint32 Slot);
 
-	inline static void SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY Topology)
-	{
-		RenderDevice->GetContext()->IASetPrimitiveTopology(Topology);
-	}
+	static void SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY Topology);
 
 	// 래퍼가 없는 D3D 기능(쿼리 등)을 디버그·측정 코드에서 직접 쓸 때만 사용한다.
-	inline static ID3D11Device* GetDevice() { return RenderDevice->GetDevice(); }
-	inline static ID3D11DeviceContext* GetContext() { return RenderDevice->GetContext(); }
+	static ID3D11Device* GetDevice();
+	static ID3D11DeviceContext* GetContext();
 
 	//inline static void BindTexture(uint32 Slot, UTexture2D* Texture2D, EShaderBindFlagBits FlagBits);
 
@@ -129,7 +122,13 @@ public:
 
 
 private:
-	inline static void BindShaderResource(uint32 Slot, ID3D11ShaderResourceView* SRV, EShaderBindFlagBits FlagBits);
+	static void BindShaderResource(uint32 Slot, ID3D11ShaderResourceView* SRV, EShaderBindFlagBits FlagBits);
 
-	inline static FRenderDevice* RenderDevice = nullptr;
+private:
+	inline static FRenderDevice* RenderDevice{ nullptr };
 };
+
+template <typename T>
+void RenderCommand::UpdateBufferData(FBuffer* InBuffer, T* Data) {
+	UpdateBufferData(InBuffer, Data, sizeof(T));
+}

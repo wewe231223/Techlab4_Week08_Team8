@@ -4,17 +4,22 @@
 #include "Engine/Scene.h"
 #include "Engine/World.h"
 
-#include <cmath>
+#include <algorithm>
 
-ULightComponent::ULightComponent() {}
-ULightComponent::~ULightComponent() {}
-void ULightComponent::DrawDebug(FLineBatcher* LineBatcher) const {}
+ULightComponent::ULightComponent() {
+}
+
+ULightComponent::~ULightComponent() {
+}
+
+void ULightComponent::DrawDebug(FLineBatcher* LineBatcher) const {
+}
 
 void ULightComponent::PostEditChangeProperty(const FProperty& Property) {
 	Super::PostEditChangeProperty(Property);
 	SetShadowMapResolution(mShadowMapResolution);
-	SetShadowDepthBias(mShadowDepthBias);
-	SetShadowSlopeScaledDepthBias(mShadowSlopeScaledDepthBias);
+	SetShadowDepthBiasPreset(GetShadowDepthBiasPreset());
+	SetShadowSlopeScaledDepthBiasPreset(GetShadowSlopeScaledDepthBiasPreset());
 	SetShadowNormalBias(mShadowNormalBias);
 }
 
@@ -23,15 +28,21 @@ bool ULightComponent::CastsShadows() const {
 }
 
 FLightShadowSettings ULightComponent::GetShadowSettings() const {
-	FLightShadowSettings Settings{
-		.mCastShadows = mCastShadows,
-		.mResolution = FMath::Clamp(mShadowMapResolution, MinShadowMapResolution, MaxShadowMapResolution),
-		.mDepthBias = std::max(mShadowDepthBias, 0.0f),
-		.mSlopeScaledDepthBias = std::max(mShadowSlopeScaledDepthBias, 0.0f),
-		.mNormalBias = std::max(mShadowNormalBias, 0.0f)		
-	};
+	FLightShadowSettings Settings{};
+	Settings.mCastShadows = mCastShadows;
+	Settings.mResolution = NormalizeShadowMapResolution(mShadowMapResolution);
+	Settings.mDepthBiasPreset = GetShadowDepthBiasPreset();
+	Settings.mSlopeScaledDepthBiasPreset = GetShadowSlopeScaledDepthBiasPreset();
+	Settings.mNormalBias = std::max(mShadowNormalBias, 0.0f);
+	return Settings;
+}
 
-	return Settings; 
+EShadowDepthBiasPreset ULightComponent::GetShadowDepthBiasPreset() const {
+	return NormalizeShadowDepthBiasPreset(mShadowDepthBiasPreset);
+}
+
+EShadowSlopeScaledDepthBiasPreset ULightComponent::GetShadowSlopeScaledDepthBiasPreset() const {
+	return NormalizeShadowSlopeScaledDepthBiasPreset(mShadowSlopeScaledDepthBiasPreset);
 }
 
 void ULightComponent::SetCastShadows(bool CastShadows) {
@@ -39,29 +50,35 @@ void ULightComponent::SetCastShadows(bool CastShadows) {
 }
 
 void ULightComponent::SetShadowMapResolution(int32 Resolution) {
-	mShadowMapResolution = FMath::Clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution);
+	mShadowMapResolution = NormalizeShadowMapResolution(Resolution);
 }
 
-void ULightComponent::SetShadowDepthBias(float DepthBias) {
-	mShadowDepthBias = std::max(DepthBias, 0.0f);
+void ULightComponent::SetShadowDepthBiasPreset(EShadowDepthBiasPreset Preset) {
+	mShadowDepthBiasPreset = static_cast<int32>(NormalizeShadowDepthBiasPreset(static_cast<int32>(Preset)));
 }
 
-void ULightComponent::SetShadowSlopeScaledDepthBias(float SlopeScaledDepthBias) {
-	mShadowSlopeScaledDepthBias = std::max(SlopeScaledDepthBias, 0.0f);
+void ULightComponent::SetShadowSlopeScaledDepthBiasPreset(EShadowSlopeScaledDepthBiasPreset Preset) {
+	mShadowSlopeScaledDepthBiasPreset = static_cast<int32>(NormalizeShadowSlopeScaledDepthBiasPreset(static_cast<int32>(Preset)));
 }
 
 void ULightComponent::SetShadowNormalBias(float NormalBias) {
 	mShadowNormalBias = std::max(NormalBias, 0.0f);
 }
 
-void ULightComponent::CreateRenderState()
-{
+FLightSceneProxy* ULightComponent::CreateSceneProxy() const {
+	return nullptr;
+}
+
+bool ULightComponent::ShouldCreateRenderState() const {
+	return true;
+}
+
+void ULightComponent::CreateRenderState() {
 	Super::CreateRenderState();
 	GetWorld()->GetScene().AddLight(this);
 }
 
-void ULightComponent::DestroyRenderState()
-{
+void ULightComponent::DestroyRenderState() {
 	GetWorld()->GetScene().RemoveLight(this);
 	Super::DestroyRenderState();
 }

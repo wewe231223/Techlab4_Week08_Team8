@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ParticleSubUVComponent.h"
+#include "Components/LightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
@@ -596,6 +597,46 @@ namespace
 		}
 	}
 
+	bool DrawShadowMapResolution(const char* Label, int32& Resolution) {
+		const char* ResolutionLabels[]{ "128", "256", "512", "1024", "2048" };
+		const int32 CurrentResolution{ NormalizeShadowMapResolution(Resolution) };
+		int32 SelectedIndex{};
+		while ((MinShadowMapResolution << SelectedIndex) < CurrentResolution) {
+			++SelectedIndex;
+		}
+		if (!ImGui::Combo(Label, &SelectedIndex, ResolutionLabels, IM_ARRAYSIZE(ResolutionLabels))) {
+			return false;
+		}
+		Resolution = MinShadowMapResolution << SelectedIndex;
+		return true;
+	}
+
+	bool DrawShadowDepthBiasPreset(const char* Label, int32& Preset) {
+		int32 SelectedIndex{ static_cast<int32>(NormalizeShadowDepthBiasPreset(Preset)) };
+		const char* Labels[ShadowDepthBiasPresetCount]{};
+		for (int32 Index{}; Index < ShadowDepthBiasPresetCount; ++Index) {
+			Labels[Index] = GetShadowDepthBiasPreset(static_cast<EShadowDepthBiasPreset>(Index)).mName;
+		}
+		if (!ImGui::Combo(Label, &SelectedIndex, Labels, ShadowDepthBiasPresetCount)) {
+			return false;
+		}
+		Preset = SelectedIndex;
+		return true;
+	}
+
+	bool DrawShadowSlopeScaledDepthBiasPreset(const char* Label, int32& Preset) {
+		int32 SelectedIndex{ static_cast<int32>(NormalizeShadowSlopeScaledDepthBiasPreset(Preset)) };
+		const char* Labels[ShadowSlopeScaledDepthBiasPresetCount]{};
+		for (int32 Index{}; Index < ShadowSlopeScaledDepthBiasPresetCount; ++Index) {
+			Labels[Index] = GetShadowSlopeScaledDepthBiasPreset(static_cast<EShadowSlopeScaledDepthBiasPreset>(Index)).mName;
+		}
+		if (!ImGui::Combo(Label, &SelectedIndex, Labels, ShadowSlopeScaledDepthBiasPresetCount)) {
+			return false;
+		}
+		Preset = SelectedIndex;
+		return true;
+	}
+
 	// UClass에 등록된 프로퍼티를 타입에 맞는 위젯으로 그린다
 	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
 	{
@@ -627,7 +668,15 @@ namespace
 			bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
 			break;
 		case EPropertyType::Int:
-			bChanged = ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
+			if (Property.Name == "mShadowMapResolution" && Cast<ULightComponent>(Object)) {
+				bChanged = DrawShadowMapResolution(Label.c_str(), *static_cast<int32*>(ValuePtr));
+			} else if (Property.Name == "mShadowDepthBiasPreset" && Cast<ULightComponent>(Object)) {
+				bChanged = DrawShadowDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
+			} else if (Property.Name == "mShadowSlopeScaledDepthBiasPreset" && Cast<ULightComponent>(Object)) {
+				bChanged = DrawShadowSlopeScaledDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
+			} else {
+				bChanged = ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
+			}
 			break;
 		case EPropertyType::Bool:
 			bChanged = ImGui::Checkbox(Label.c_str(), static_cast<bool*>(ValuePtr));
