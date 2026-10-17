@@ -19,6 +19,16 @@ public:
 
 	void Build(std::span<const T> InElements);
 
+	// Build/Refit에서 갱신한 전체 원소의 AABB를 반환한다.
+	bool TryGetRootBounds(FBox& OutBounds) const
+	{
+		if (Elements.IsEmpty())
+			return false;
+
+		OutBounds = RootBounds;
+		return true;
+	}
+
 	// 루트노드부터 Bounding Box 재계산
 	void Refit();
 

@@ -403,4 +403,28 @@ void FRenderDevice::CreateStates()
 
 		Device->CreateSamplerState(&Desc, SamplerStates[(uint8)ESamplerState::LinearWrap].GetAddressOf());
 	}
+
+	{
+		D3D11_SAMPLER_DESC ShadowDesc{};
+
+		ShadowDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+
+		ShadowDesc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+		ShadowDesc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+		ShadowDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+
+		ShadowDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+
+		// 그림자맵 바깥쪽은 빛을 받는 것으로 처리한다.
+		ShadowDesc.BorderColor[0] = 1.0f;
+		ShadowDesc.BorderColor[1] = 1.0f;
+		ShadowDesc.BorderColor[2] = 1.0f;
+		ShadowDesc.BorderColor[3] = 1.0f;
+
+		ShadowDesc.MaxAnisotropy = 1;
+		ShadowDesc.MinLOD = 0.0f;
+		ShadowDesc.MaxLOD = 0.0f;
+
+		Device->CreateSamplerState(&ShadowDesc,SamplerStates[(uint8)ESamplerState::ShadowComparison].GetAddressOf());
+	}
 }

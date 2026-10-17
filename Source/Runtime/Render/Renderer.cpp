@@ -171,6 +171,7 @@ void FRenderer::RenderOpaque(const FMatrix& ViewProjection)
 	RenderCommand::BindConstantBuffer(5, GridLightingCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	if(ShadowBuffer)
 		RenderCommand::BindShaderResource(11, ShadowBuffer, EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
+	RenderCommand::BindSamplerState(1,ESamplerState::ShadowComparison,EShaderBindFlagBits::Pixel);
 	RenderCommand::BindConstantBuffer(6, ShadowMapCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 
 	DrawStaticGroups();

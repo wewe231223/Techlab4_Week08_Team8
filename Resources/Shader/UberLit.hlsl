@@ -126,6 +126,7 @@ Texture2D NormalTexture : register(t1);
 Texture2D ShadowMap : register(t11);
 
 SamplerState MaterialSampler : register(s0);
+SamplerComparisonState ShadowSampler : register(s1);
 
 struct VS_INPUT
 {
@@ -314,13 +315,57 @@ float3 GetHeatmapColor(uint LightCount)
     return saturate(float3(t * 2 - 0.5, 1 - abs(t * 2 - 1), 1.5 - t * 2));
 }
 
+float SampleDirectionalShadowPCF(float3 WorldPos)
+{
+    float4 LightClip = mul(float4(WorldPos, 1.0f), LightViewProj);
+
+    if (LightClip.w <= 0.0f)
+        return 1.0f;
+
+    float3 LightNDC = LightClip.xyz / LightClip.w;
+    float2 ShadowUV = LightNDC.xy * float2(0.5f, -0.5f) + 0.5f;
+
+    if (any(ShadowUV < 0.0f) || any(ShadowUV > 1.0f) || LightNDC.z < 0.0f || LightNDC.z > 1.0f)
+    {
+        return 1.0f;
+    }
+
+    uint Width, Height;
+    ShadowMap.GetDimensions(Width, Height);
+
+    // 그림자맵에서 한 텍셀 이동하는 UV 거리
+    float2 TexelSize = 1.0f / float2(Width, Height);
+
+    const float Bias = 0.0075f;
+    const float CompareDepth = LightNDC.z - Bias;
+
+    static const int Radius = 1; // 3×3
+    float Visibility = 0.0f;
+
+    [unroll]
+    for (int Y = -Radius; Y <= Radius; ++Y)
+    {
+        [unroll]
+        for (int X = -Radius; X <= Radius; ++X)
+        {
+            Visibility += ShadowMap.SampleCmpLevelZero(ShadowSampler, ShadowUV + float2(X, Y) * TexelSize, CompareDepth
+            );
+        }
+    }
+
+    return Visibility / float((2 * Radius + 1) * (2 * Radius + 1));
+}
+
 // Directional + 로컬 라이트의 Diffuse/Specular를 모두 더한다. Ambient는 포함하지 않는다.
 // bUseLightGrid = true면 SvPosition이 속한 셀의 라이트만, false면 전체 로컬 라이트를 순회한다.
 // VS(Gouraud)는 픽셀 위치가 없어 셀을 쓸 수 없으므로 false로 호출한다.
-FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid)
+FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid, float DirectionalVisibility)
 {
     // Directional Light는 처음에 한 번만 계산
     FLightContribution Total = CalcDirectionalLight(N, V, InShininess);
+    
+    Total.Diffuse *= DirectionalVisibility;
+    Total.Specular *= DirectionalVisibility;
 
     uint LightCount = NumLocalLights;
     uint CellOffset = 0;
@@ -344,6 +389,7 @@ FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos,
         Total.Diffuse += LightContribution.Diffuse;
         Total.Specular += LightContribution.Specular;
     }
+   
 
     return Total;
 }
@@ -412,32 +458,21 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
 #elif WORLD_NORMAL
     return float4(N * 0.5f + 0.5f, 1.0f);
 #else
+    
+    const float Visibility = SampleDirectionalShadowPCF(Input.WorldPos);
+    
     float3 DiffuseLighting = { GetAmbientLighting() };
     float3 SpecularLighting = { 0.0f, 0.0f, 0.0f };
 
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
     const float3 V = { normalize(CameraWorldPos - Input.WorldPos) };
-    const FLightContribution Contribution = { AccumulateDirectLighting(N, V, Input.WorldPos, Shininess, Input.SvPosition, true) };
+    const FLightContribution Contribution = { AccumulateDirectLighting(N, V, Input.WorldPos, Shininess, Input.SvPosition, true, Visibility) };
     DiffuseLighting += Contribution.Diffuse;
     SpecularLighting = Contribution.Specular;
 #elif LIGHTING_MODEL_GOURAUD
     DiffuseLighting += Input.VertexDiffuse;
 #endif
 
-    float4 LightClip = mul(float4(Input.WorldPos, 1.0f), LightViewProj);
-    float3 LightNDC = LightClip.xyz / LightClip.w;
-    float2 ShadowUV = LightNDC.xy * float2(0.5f, -0.5f) + 0.5f;
-
-    float CurrentDepth = LightNDC.z;
-    float ShadowMapDepth = ShadowMap.Sample(MaterialSampler, ShadowUV).r;
-    float Shadow = 1.0f;
-
-    if (all(ShadowUV >= 0.0f) && all(ShadowUV <= 1.0f) && LightNDC.z >= 0.0f && LightNDC.z <= 1.0f)
-    {
-        if (CurrentDepth >= ShadowMapDepth + 0.00001f)
-            Shadow = 0.0f;
-    }
-
-    return float4((Albedo.rgb * DiffuseLighting + SpecularLighting) * Shadow, Alpha);
+    return float4((Albedo.rgb * DiffuseLighting + SpecularLighting), Alpha);
 #endif
 }

@@ -947,56 +947,22 @@ void UEditorEngine::UpdateGizmoAndPicking()
 	}
 }
 
-void UEditorEngine::RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection)
+void UEditorEngine::RenderShadowMapPass(UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo)
 {
-	FGridFrustum Frustum{};
-	if (!BuildGridFrustum(ViewProjection, Frustum)) { return; }
+	const FScene& Scene = ViewWorld.GetScene();
+	FBox SceneBounds;
+	if (!Scene.BVH.TryGetRootBounds(SceneBounds))
+		return;
 
-	constexpr float ShadowDistance = 10.0f;
-
-	const FVector CameraPosition = MultipleViewportsAdapter.GetEngineCameraLocation(ViewIndex);
-	const FVector CameraForward = MultipleViewportsAdapter.GetEngineCameraForward(ViewIndex).GetSafeNormal();
-
-	// Corners[0~3]: Near, Corners[4~7]: 대응하는 Far
-	for (int32 i = 0; i < 4; ++i)
-	{
-		const FVector NearCorner = Frustum.Corners[i];
-		const FVector Edge = Frustum.Corners[i + 4] - NearCorner;
-
-		const float NearDepth =(NearCorner - CameraPosition).Dot(CameraForward);
-		const float DepthSpan = Edge.Dot(CameraForward);
-		if (DepthSpan <= 1.0e-6f)
-			return;
-
-		const float Start = FMath::Clamp((-ShadowDistance - NearDepth) / DepthSpan, 0.0f, 1.0f);
-		const float End = FMath::Clamp((ShadowDistance - NearDepth) / DepthSpan, 0.0f, 1.0f);
-
-		if (End <= Start)
-			return;
-
-		Frustum.Corners[i] = NearCorner + Edge * Start;
-		Frustum.Corners[i + 4] = NearCorner + Edge * End;
-	}
-
-	FVector center{};
-	for (const FVector corner : Frustum.Corners) { center += corner;}
-	center /= 8;
-	float radius = 0.0f;
-	for (const FVector corner : Frustum.Corners) { radius = std::max(radius, (corner - center).Size()); }
+	const FVector Center = (SceneBounds.Min + SceneBounds.Max) * 0.5f;
+	const FVector Extent = (SceneBounds.Max - SceneBounds.Min) * 0.5f;
+	constexpr float ShadowNear = 0.1f;
+	constexpr float BoundsPadding = 0.1f;
 
 	FShadowRenderer* shadowrenderer = ShadowRenderer.get();
 
 	FRenderingInfo ShadowInfo = ViewRenderingInfo;
 	FTexture2D* atlas = shadowrenderer->GetShadowBufferAtlas();
-
-	// 미세한 계산 오차로 촬영 크기가 계속 바뀌는 것을 완화한다.
-	radius = std::ceil(radius * 16.0f) / 16.0f;
-
-	// 스냅 때문에 가장자리가 잘리지 않도록 약 1 texel 여유를 준다.
-	radius += (2.0f * radius) / atlas->GetWidth();
-
-	const float WorldUnitsPerTexel =
-		(2.0f * radius) / atlas->GetWidth();
 
 	ShadowInfo.DepthStencil.Texture = atlas;
 	ShadowInfo.ViewportSetting.Width = atlas->GetWidth();
@@ -1004,10 +970,8 @@ void UEditorEngine::RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld
 	ShadowInfo.ColorRenderTargets.Reset();
 
 	RenderCommand::BeginRenderPass(ShadowInfo);
-	float nearshadow = 0.1f;
 
-	const FScene& scene = ViewWorld.GetScene();
-	for (const FDirectionalLightSceneProxy* proxy : scene.DirectionalLightProxies)
+	for (const FDirectionalLightSceneProxy* proxy : Scene.DirectionalLightProxies)
 	{
 		if (!proxy->IsVisible()) continue;
 
@@ -1015,8 +979,9 @@ void UEditorEngine::RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld
 		proxy->GetLightShaderParameters(light);
 		FMatrix lightviewporj{};
 
-		FVector direction = light.Direction.GetSafeNormal();
-		const float retreat = radius + nearshadow;
+		const FVector direction = light.Direction.GetSafeNormal();
+		if (direction.SizeSquared() == 0.0f)
+			continue;
 
 		FVector uphint(0.0f, 0.0f, 1.0f);
 
@@ -1025,17 +990,12 @@ void UEditorEngine::RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld
 		const FVector right = uphint.Cross(direction).GetSafeNormal();
 		const FVector up = direction.Cross(right).GetSafeNormal();
 
-		const float CenterRight = center.Dot(right);
-		const float CenterUp = center.Dot(up);
+		// AABB의 8개 꼭짓점을 빛의 각 축에 투영했을 때의 반쪽 크기다.
+		const float HalfWidth = right.GetAbs().Dot(Extent) + BoundsPadding;
+		const float HalfHeight = up.GetAbs().Dot(Extent) + BoundsPadding;
+		const float HalfDepth = direction.GetAbs().Dot(Extent) + BoundsPadding;
 
-		const float SnappedRight = std::round(CenterRight / WorldUnitsPerTexel) * WorldUnitsPerTexel;
-
-		const float SnappedUp = std::round(CenterUp / WorldUnitsPerTexel) * WorldUnitsPerTexel;
-
-		const FVector SnappedCenter = center + right * (SnappedRight - CenterRight) + up * (SnappedUp - CenterUp);
-
-		const FVector lightcameraposition =
-			SnappedCenter - direction * retreat;
+		const FVector lightcameraposition = Center - direction * (HalfDepth + ShadowNear);
 
 		const FMatrix LightCameraWorld(
 			FVector4(direction, 0.0f),
@@ -1048,11 +1008,12 @@ void UEditorEngine::RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld
 
 		FCameraProjection shadowprojection{};
 		shadowprojection.Mode = EProjectionMode::Orthographic;
-		shadowprojection.OrthoWidth = 2.0f * radius;
-		shadowprojection.NearClip = nearshadow;
-		shadowprojection.FarClip = nearshadow + 2.0f * radius;
+		shadowprojection.OrthoWidth = 2.0f * HalfWidth;
+		shadowprojection.NearClip = ShadowNear;
+		shadowprojection.FarClip = ShadowNear + 2.0f * HalfDepth;
 
-		const FMatrix lightproj = BuildProjectionMatrix(shadowprojection, 1.0f); // aspect ratio를 Atlas 값 받아와서 적용하게 수정해야할듯
+		// Bounds의 폭/높이를 각각 Atlas 전체 UV 범위에 대응시킨다.
+		const FMatrix lightproj = BuildProjectionMatrix(shadowprojection, HalfWidth / HalfHeight);
 
 		lightviewporj = lightview * lightproj;
 
@@ -1071,7 +1032,7 @@ void UEditorEngine::RenderShadowMapPass(const int32 ViewIndex, UWorld& ViewWorld
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
 void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue)
 {
-	RenderShadowMapPass(ViewIndex,ViewWorld, ViewRenderingInfo, ViewProjection);
+	RenderShadowMapPass(ViewWorld, ViewRenderingInfo);
 
 	RenderOpaquePass(ViewIndex, ViewRenderingInfo, ViewProjection, ViewCameraLocation, ViewCameraForward, RenderQueue);
 
