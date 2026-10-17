@@ -395,7 +395,7 @@ VS_OUTPUT mainVS(VS_INPUT Input)
     Output.ReceiveShadow = bReceiveShadow;
 #if LIGHTING_MODEL_GOURAUD
     const float3 V = normalize(CameraWorldPos - Output.WorldPos);
-    const FLightContribution Contribution = AccumulateDirectLighting(normalize(Output.Normal), V, Output.WorldPos, 1, Output.SvPosition, false, Output.ReceiveShadow);
+    const FLightContribution Contribution = AccumulateDirectLighting(normalize(Output.Normal), V, Output.WorldPos, 1, Output.SvPosition, false, 0.f);
     Output.VertexDiffuse = Contribution.Diffuse;
 #endif
     return Output;
