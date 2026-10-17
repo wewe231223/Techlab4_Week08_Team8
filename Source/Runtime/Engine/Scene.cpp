@@ -195,7 +195,6 @@ void FScene::UpdateLights(FRenderer* Renderer)
 
 namespace
 {
-	constexpr uint32 DefaultShadowMapResolution = 1024;
 
 	// DSV로 깊이를 쓰고 메인 패스에서 SRV로 읽어야 해서 TYPELESS로 만든다.
 	// FTexture2D::CreateViews가 TYPELESS 깊이로 처리하는 포맷이 R24G8뿐이라 그에 맞춘다.
@@ -257,13 +256,12 @@ void FScene::RenderLightShadowDepth(FRenderer* Renderer, FLightSceneProxy* Proxy
 	const float   Radius = (Bounds.Max - Bounds.Min).Length() * 0.5f;
 
 	// 처음 필요할 때 만들고 이후 재사용한다. 해상도가 바뀌면 통째로 다시 만든다.
-	const uint32 Resolution = DefaultShadowMapResolution;
-	if (Proxy->ShadowMaps.Num() != NumShadowMaps || Proxy->ShadowMapResolution != Resolution)
+	const uint32 Resolution = LightComponent->GetShadowResolution();
+	if (Proxy->ShadowMaps.Num() != NumShadowMaps || (NumShadowMaps > 0 && Proxy->ShadowMaps[0]->GetWidth() != Resolution));
 	{
 		Proxy->ShadowMaps.Reset();
 		for (int32 Index = 0; Index < NumShadowMaps; ++Index)
 			Proxy->ShadowMaps.Add(CreateShadowMap(Resolution));
-		Proxy->ShadowMapResolution = Resolution;
 	}
 
 
@@ -273,7 +271,7 @@ void FScene::RenderLightShadowDepth(FRenderer* Renderer, FLightSceneProxy* Proxy
 		FTexture2D* ShadowMap = Proxy->ShadowMaps[Index].get();
 		if (!ShadowMap) continue;
 
-		const FMatrix LightViewProjection = LightComponent->GetShadowViewPorjection(Proxy->ShadowMapResolution, Center, Radius, Index);
+		const FMatrix LightViewProjection = LightComponent->GetShadowViewPorjection(Center, Radius, Index);
 		GatherShadowCasters(LightViewProjection);
 
 		Renderer->TEMP_SetDirectionalShadow(ShadowMap, LightViewProjection);

@@ -43,7 +43,6 @@ private:
     int32 PackedIndex = INDEX_NONE;
 
 	TArray<TUniquePtr<FTexture2D>> ShadowMaps;
-	uint32 ShadowMapResolution = 1024;
 };
 
 

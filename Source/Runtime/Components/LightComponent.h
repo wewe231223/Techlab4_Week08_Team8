@@ -10,6 +10,7 @@ class ULightComponent : public ULightComponentBase
 
 	REFLECT_START(ULightComponent)
 	PROPERTY(bCastShadows)
+	PROPERTY(ShadowResolution)
 	REFLECT_END()
 public:
 	ULightComponent();
@@ -22,7 +23,8 @@ public:
 	bool IsCastShadows() const { return bCastShadows; }
 
 	//index : PointLight 6면 ViewProj 가져오는 용도, 다른 라이트는 0을 사용
-	virtual FMatrix GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index = 0) const = 0;
+	virtual FMatrix GetShadowViewPorjection(FVector Center, float Radius, int index = 0) const = 0;
+	const uint32 GetShadowResolution() const { return ShadowResolution; }
 
 	virtual class FLightSceneProxy* CreateSceneProxy() const
 	{
@@ -39,6 +41,7 @@ protected:
 	virtual void DestroyRenderState() override;
 
 	bool bCastShadows = true;
+	uint32 ShadowResolution = 1024;
 private:
 
 

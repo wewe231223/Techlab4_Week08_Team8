@@ -17,7 +17,7 @@ FLightSceneProxy* UDirectionalLightComponent::CreateSceneProxy() const
     return new FDirectionalLightSceneProxy(this);
 }
 
-FMatrix UDirectionalLightComponent::GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index) const
+FMatrix UDirectionalLightComponent::GetShadowViewPorjection(FVector Center, float Radius, int index) const
 {
     if (Radius <= 0.f)
         return FMatrix();

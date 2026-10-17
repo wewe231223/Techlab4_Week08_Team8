@@ -33,7 +33,7 @@ namespace
 
 // TODO: Spot처럼 원근 1장 (Eye를 Rect 뒤로 물리고 FOV = 2 * BarnDoorAngle). 지금은 항등 행렬
 // FMatrix()는 0 행렬이라 절두체 평면을 뽑을 때 assert가 걸린다. 반드시 Identity를 쓴다.
-FMatrix URectLightComponent::GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index) const
+FMatrix URectLightComponent::GetShadowViewPorjection(FVector Center, float Radius, int index) const
 {
     return FMatrix::Identity;
 }

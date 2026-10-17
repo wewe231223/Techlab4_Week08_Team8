@@ -13,7 +13,7 @@ public:
 
 	ELightType GetLightType() const override { return ELightType::Sky; }
 	// 앰비언트라 그림자가 없다 (프록시도 만들지 않으므로 호출되지 않음)
-	FMatrix GetShadowViewPorjection(const uint32 ShadowMapResolution, FVector Center, float Radius, int index = 0) const override { return FMatrix::Identity; }
+	FMatrix GetShadowViewPorjection(FVector Center, float Radius, int index = 0) const override { return FMatrix::Identity; }
 	
 protected:
 private:
