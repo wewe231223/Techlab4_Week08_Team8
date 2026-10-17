@@ -23,6 +23,7 @@ struct FRenderPacket
     uint32 Slot = InvalidObjectSlot;
     uint8 LODIndex = 0;
     bool bOccludedByGpu = false;
+    bool bReciveShadow = true;
 };
 
 // Shared bindings, with one ordinary indexed draw per item.

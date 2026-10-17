@@ -74,9 +74,10 @@ void FShadowDepthRenderer::DrawCaster(const FPrimitiveSceneProxy* Caster)
 	constexpr uint32 LODIndex = 0;
 	const FCachedMeshLOD& LOD = Caster->GetLOD(LODIndex);
 
+	//TODO : 큰 슬롯 버퍼에 한 번에 올리고 BindConstanBufferRanger로 칸만 바꿔가며 바인딩하는 방식으로 바꾸기
 	uint8* Dest = static_cast<uint8*>(RenderCommand::MapWriteDiscard(ObjectConstantBuffer.get()));
 	if (!Dest) return;
-	WritePerObjectConstants(Dest, Caster->GetLocalToWorld(), Caster->GetWorldToLocal());
+	WritePerObjectConstants(Dest, Caster->GetLocalToWorld(), Caster->GetWorldToLocal(), Caster->IsReciveShadow());
 	RenderCommand::Unmap(ObjectConstantBuffer.get());
 
 	RenderCommand::BindMesh(Mesh, LODIndex);

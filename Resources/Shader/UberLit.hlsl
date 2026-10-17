@@ -85,6 +85,8 @@ cbuffer PerObjectConstants : register(b2)
 {
     matrix World;
     matrix WorldInverseTranspose; // (World^-1)^T
+    uint bReceiveShadow;
+    uint3 ObjectPadding;
 };
 
 // b3는 FireBall이 쓰는 동안 비워 둔다.
@@ -148,6 +150,9 @@ struct VS_OUTPUT
     float4 Tangent : TANGENT;
     float2 UV : TEXCOORD0;
     float4 Color : COLOR;
+    // b2(PerObjectConstants)는 VS에만 바인딩되므로 오브젝트 값은 VS가 읽어 PS로 넘긴다.
+    // 오브젝트 하나 안에서 같은 값이라 보간하지 않는다.
+    nointerpolation uint ReceiveShadow : BLENDINDICES0;
 #if LIGHTING_MODEL_GOURAUD
     float3 VertexDiffuse : COLOR1;   // 정점에서 미리 계산한 Diffuse 조명
 #endif
@@ -204,9 +209,10 @@ float3 GetAmbientLighting()
     return Ambient.Color * Ambient.Intensity;
 }
 
-float CalcDirectionalShadow(float3 WorldPos)
+// InReceiveShadow: 오브젝트가 그림자를 받는지. PS에서는 b2를 읽을 수 없으므로 VS가 넘긴 값을 인자로 받는다.
+float CalcDirectionalShadow(float3 WorldPos, uint InReceiveShadow)
 {
-    if (Directional.bHasShadow == 0)
+    if (Directional.bHasShadow == 0 || InReceiveShadow == 0)
         return 1.0f;
     
     const float4 LightClip = mul(float4(WorldPos, 1.f), DirectionalViewProjection);
@@ -225,9 +231,9 @@ float CalcDirectionalShadow(float3 WorldPos)
 }
 
 // Directional Light의 영향을 구한다
-FLightContribution CalcDirectionalLight(float3 N, float3 V, float3 WorldPos, float InShininess)
+FLightContribution CalcDirectionalLight(float3 N, float3 V, float3 WorldPos, float InShininess, uint InReceiveShadow)
 {
-    const float3 Radiance = Directional.Color * Directional.Intensity * CalcDirectionalShadow(WorldPos);
+    const float3 Radiance = Directional.Color * Directional.Intensity * CalcDirectionalShadow(WorldPos, InReceiveShadow);
     return SurfaceShading(N, -Directional.Direction, V, Radiance, InShininess);
 }
 
@@ -340,10 +346,10 @@ float3 GetHeatmapColor(uint LightCount)
 // Directional + 로컬 라이트의 Diffuse/Specular를 모두 더한다. Ambient는 포함하지 않는다.
 // bUseLightGrid = true면 SvPosition이 속한 셀의 라이트만, false면 전체 로컬 라이트를 순회한다.
 // VS(Gouraud)는 픽셀 위치가 없어 셀을 쓸 수 없으므로 false로 호출한다.
-FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid)
+FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid, uint InReceiveShadow)
 {
     // Directional Light는 처음에 한 번만 계산
-    FLightContribution Total = CalcDirectionalLight(N, V, WorldPos, InShininess);
+    FLightContribution Total = CalcDirectionalLight(N, V, WorldPos, InShininess, InReceiveShadow);
 
     uint LightCount = NumLocalLights;
     uint CellOffset = 0;
@@ -386,9 +392,10 @@ VS_OUTPUT mainVS(VS_INPUT Input)
 
     Output.UV = Input.UV;
     Output.Color = Input.Color;
+    Output.ReceiveShadow = bReceiveShadow;
 #if LIGHTING_MODEL_GOURAUD
     const float3 V = normalize(CameraWorldPos - Output.WorldPos);
-    const FLightContribution Contribution = AccumulateDirectLighting(normalize(Output.Normal), V, Output.WorldPos, 1, Output.SvPosition, false);
+    const FLightContribution Contribution = AccumulateDirectLighting(normalize(Output.Normal), V, Output.WorldPos, 1, Output.SvPosition, false, Output.ReceiveShadow);
     Output.VertexDiffuse = Contribution.Diffuse;
 #endif
     return Output;
@@ -443,7 +450,7 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
 
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
     const float3 V = { normalize(CameraWorldPos - Input.WorldPos) };
-    const FLightContribution Contribution = { AccumulateDirectLighting(N, V, Input.WorldPos, Shininess, Input.SvPosition, true) };
+    const FLightContribution Contribution = { AccumulateDirectLighting(N, V, Input.WorldPos, Shininess, Input.SvPosition, true, Input.ReceiveShadow) };
     DiffuseLighting += Contribution.Diffuse;
     SpecularLighting = Contribution.Specular;
 #elif LIGHTING_MODEL_GOURAUD

@@ -20,12 +20,14 @@ struct FPerObjectConstants
 	FMatrix World;
 	// (World^-1)^T. 비균등 스케일에서도 노멀이 표면에 수직으로 남도록 노멀 변환에 쓴다.
 	FMatrix NormalMatrix;
+	uint32 bReciveShadow;
+	uint32 Padding[3];
 };
 
 // 오브젝트 칸 하나를 채운다. 프록시는 WorldToLocal을 이미 들고 있어 역행렬 계산을 건너뛸 수 있다.
-inline void WritePerObjectConstants(uint8* Dest, const FMatrix& World, const FMatrix& WorldToLocal)
+inline void WritePerObjectConstants(uint8* Dest, const FMatrix& World, const FMatrix& WorldToLocal, bool bReciveShadow)
 {
-	const FPerObjectConstants Constants{ World, WorldToLocal.GetTransposed() };
+	const FPerObjectConstants Constants{ World, WorldToLocal.GetTransposed(), bReciveShadow ? 1u : 0u, {} };
 	std::memcpy(Dest, &Constants, sizeof(Constants));
 }
 
@@ -253,7 +255,7 @@ public:
 private:
 	void DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProjection);
 	void DrawStaticGroups();
-	void UpdatePerObjectConstants(const FMatrix& World);
+	void UpdatePerObjectConstants(const FMatrix& World, bool bReciveShadow);
 	void BindMaterial(UMaterial* Material);
 	void UpdateMaterialParams(const FRenderPacket& RenderPacket);
 	void UpdatePerObjectConstants(const FRenderPacket& RenderPacket, const FMatrix& ViewProjection);

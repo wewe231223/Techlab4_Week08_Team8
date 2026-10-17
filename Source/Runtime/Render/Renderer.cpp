@@ -149,7 +149,7 @@ void FRenderer::UploadPerObjectConstants()
 		FRenderPacket& P = RenderPackets[Index];
 		const FMatrix& Model = GetPacketWorld(P);
 		const FMatrix WorldToLocal = P.Proxy ? P.Proxy->GetWorldToLocal() : Model.Inverse();
-		WritePerObjectConstants(Dest + static_cast<size_t>(Index) * ObjectSlotBytes, Model, WorldToLocal);
+		WritePerObjectConstants(Dest + static_cast<size_t>(Index) * ObjectSlotBytes, Model, WorldToLocal, P.bReciveShadow);
 		P.Slot = Index;
 	}
 
@@ -237,7 +237,7 @@ void FRenderer::DrawStaticGroups()
 			else
 			{
 				RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
-				UpdatePerObjectConstants(Item.Proxy->GetLocalToWorld());
+				UpdatePerObjectConstants(Item.Proxy->GetLocalToWorld(), Item.Proxy->IsReciveShadow());
 			}
 			RenderCommand::DrawIndexed(Item.IndexCount, Item.StartIndex);
 		}
@@ -460,7 +460,7 @@ FOcclusionMeasureResult FRenderer::MeasureOpaqueOcclusion(const FMatrix& ViewPro
 		else
 		{
 			RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
-			UpdatePerObjectConstants(*Draw.World);
+			UpdatePerObjectConstants(*Draw.World, true);   // 색을 쓰지 않는 측정 패스라 그림자 수신 여부는 결과와 무관하다
 		}
 
 		ID3D11Query* Query = OcclusionQueries[Index].Get();
@@ -611,17 +611,15 @@ void FRenderer::UpdatePerObjectConstants(const FRenderPacket& RenderPacket, cons
 	// rp.Transform 과 Camera VP 행렬 곱
 	// 행렬곱의 결과 (MVP Matrix) Constant Buffer 업데이트 필요
 
-	UpdatePerObjectConstants(GetPacketWorld(RenderPacket));
+	UpdatePerObjectConstants(GetPacketWorld(RenderPacket), RenderPacket.bReciveShadow);
 }
 
-void FRenderer::UpdatePerObjectConstants(const FMatrix& World)
+void FRenderer::UpdatePerObjectConstants(const FMatrix& World, bool bReciveShadow)
 {
-	FPerObjectConstants Constants;
-
-	Constants.World = World;
-	Constants.NormalMatrix = World.Inverse().GetTransposed();
-
-	RenderCommand::UpdateBufferData(PerObjectCB.get(), &Constants);
+	// 슬롯 경로와 같은 함수로 채워 필드가 빠지거나 초기화되지 않은 값이 올라가지 않게 한다.
+	uint8 Bytes[sizeof(FPerObjectConstants)];
+	WritePerObjectConstants(Bytes, World, World.Inverse(), bReciveShadow);
+	RenderCommand::UpdateBufferData(PerObjectCB.get(), Bytes, sizeof(Bytes));
 }
 
 

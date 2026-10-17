@@ -78,6 +78,14 @@ void UPrimitiveComponent::MarkRenderStateDirty()
 		SceneProxy->GetScene()->MarkRenderStateDirty(SceneProxy);
 }
 
+// Details 패널은 필드를 직접 바꾸고 이 함수만 부른다. 프록시가 캐싱하는 값은 여기서 다시 읽게 해야 렌더링에 반영된다.
+void UPrimitiveComponent::PostEditChangeProperty(const FProperty& Property)
+{
+	Super::PostEditChangeProperty(Property);
+	if (Property.Name == "bVisible" || Property.Name == "bReciveShadow")
+		MarkRenderStateDirty();   // 다음 UpdateAllTransforms에서 FPrimitiveSceneProxy::UpdateRenderState가 다시 복사한다
+}
+
 bool UPrimitiveComponent::LineTraceComponentLocal(const FRay& LocalRay, float& OutT)
 {
 	const FStaticMeshData* Mesh = GetMeshData();

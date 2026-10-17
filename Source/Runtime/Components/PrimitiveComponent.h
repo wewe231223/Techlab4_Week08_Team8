@@ -36,6 +36,7 @@ public:
 	virtual ~UPrimitiveComponent();
 
 	virtual void BeginPlay() override;
+	virtual void PostEditChangeProperty(const FProperty& Property) override;
 
 	// Todo: subuv
 	//void SubmitToRenderQueue(TQueue<FRenderPacket>& RenderQueue);

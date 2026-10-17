@@ -82,6 +82,7 @@ void UStaticMeshComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, uint32
         Packet.StartIndex = Section.StartIndex;
         Packet.IndexCount = Section.IndexCount;
         Packet.LODIndex = static_cast<uint8>(LODIndex);
+		Packet.bReciveShadow = Proxy->IsReciveShadow();
     }
 }
 /*
