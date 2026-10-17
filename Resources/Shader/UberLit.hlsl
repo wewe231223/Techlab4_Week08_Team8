@@ -161,6 +161,7 @@ struct FLightContribution
     float3 Specular;
 };
 
+#if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
 float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps) {
         return 1.0f;
@@ -198,6 +199,7 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, GetShadowAtlasUv(ShadowUv, Parameters), ComparisonDepth);
 #endif
 }
+#endif
 
 // 원뿔 감쇠량. 0(Outer 밖) ~ 1(Inner 안)
 float GetSpotConeAttenuation(FLightRenderParameters Light, float3 L)
@@ -245,7 +247,10 @@ float3 GetAmbientLighting()
 
 // Directional Light의 영향을 구한다
 FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, float3 V, float3 WorldPos, float InShininess) {
-    const float3 Radiance = { Light.Color * Light.Intensity * CastShadow(Light.mShadowIndex, WorldPos, N) };
+    float3 Radiance = { Light.Color * Light.Intensity };
+#if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+    Radiance *= CastShadow(Light.mShadowIndex, WorldPos, N);
+#endif
     return SurfaceShading(N, -Light.Direction, V, Radiance, InShininess);
 }
 
@@ -325,32 +330,13 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
         Result = CalcRectLight(Light, N, V, WorldPos, InShininess);
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
-#if !defined(LIGHTING_MODEL_GOURAUD)
+#if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
     const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif
     return Result;
 }
-
-#if defined(LIGHTING_MODEL_GOURAUD)
-bool HasSpotShadow(FLightRenderParameters Light) {
-    return mReceiveShadows != 0 && Light.Type == LIGHT_TYPE_SPOT && Light.mShadowIndex >= 0 && (uint) Light.mShadowIndex < NumShadowMaps;
-}
-
-FLightContribution AccumulateShadowedSpotLighting(float3 N, float3 V, float3 WorldPos) {
-    FLightContribution Total = { (FLightContribution) 0 };
-    for (uint Index = { 0 }; Index < NumLocalLights; ++Index) {
-        const FLightRenderParameters Light = { LocalLights[Index] };
-        if (!HasSpotShadow(Light)) {
-            continue;
-        }
-        const FLightContribution Contribution = { CalcSpotLight(Light, N, V, WorldPos, 1.0f) };
-        Total.Diffuse += Contribution.Diffuse * CastShadow(Light.mShadowIndex, WorldPos, N);
-    }
-    return Total;
-}
-#endif
 
 // 픽셀이 속한 깊이 슬라이스 번호
 uint GetSliceIndex(float4 SvPosition)
@@ -394,11 +380,7 @@ float3 GetHeatmapColor(uint LightCount)
 // VS(Gouraud)는 픽셀 위치가 없어 셀을 쓸 수 없으므로 false로 호출한다.
 FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid)
 {
-#if defined(LIGHTING_MODEL_GOURAUD)
-    FLightContribution Total = { (FLightContribution) 0 };
-#else
     FLightContribution Total = { AccumulateDirectionalLighting(N, V, WorldPos, InShininess) };
-#endif
 
     uint LightCount = NumLocalLights;
     uint CellOffset = 0;
@@ -418,11 +400,6 @@ FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos,
     for (uint Index = 0; Index < LightCount; ++Index)
     {
         const uint LightIndex = bUseCellList ? CellLightIndices[CellOffset + 1 + Index] : Index;
-#if defined(LIGHTING_MODEL_GOURAUD)
-        if (HasSpotShadow(LocalLights[LightIndex])) {
-            continue;
-        }
-#endif
         const FLightContribution LightContribution = CalcLocalLight(LocalLights[LightIndex], N, V, WorldPos, InShininess);
         Total.Diffuse += LightContribution.Diffuse;
         Total.Specular += LightContribution.Specular;
@@ -498,15 +475,13 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
     float3 DiffuseLighting = { GetAmbientLighting() };
     float3 SpecularLighting = { 0.0f, 0.0f, 0.0f };
 
-    const float3 V = { normalize(CameraWorldPos - Input.WorldPos) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+    const float3 V = { normalize(CameraWorldPos - Input.WorldPos) };
     const FLightContribution Contribution = { AccumulateDirectLighting(N, V, Input.WorldPos, Shininess, Input.SvPosition, true) };
     DiffuseLighting += Contribution.Diffuse;
     SpecularLighting = Contribution.Specular;
 #elif LIGHTING_MODEL_GOURAUD
-    const FLightContribution DirectionalContribution = { AccumulateDirectionalLighting(VertexNormal, V, Input.WorldPos, 1.0f) };
-    const FLightContribution SpotContribution = { AccumulateShadowedSpotLighting(VertexNormal, V, Input.WorldPos) };
-    DiffuseLighting += Input.VertexDiffuse + DirectionalContribution.Diffuse + SpotContribution.Diffuse;
+    DiffuseLighting += Input.VertexDiffuse;
 #endif
 
     return float4(Albedo.rgb * DiffuseLighting + SpecularLighting, Alpha);

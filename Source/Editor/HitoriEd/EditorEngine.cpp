@@ -947,11 +947,13 @@ void UEditorEngine::UpdateGizmoAndPicking()
 }
 
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
-void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue)
-{
+void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
 	FScene& Scene{ ViewWorld.GetScene() };
 	TArray<FShadowMapRequest> ShadowRequests{};
-	Scene.GatherShadowRequests(ShadowRequests);
+	const EViewMode ViewMode{ MultipleViewportsAdapter.GetViewMode(ViewIndex) };
+	if (ViewMode == EViewMode::Lit_Lambert || ViewMode == EViewMode::Lit_BlinnPhong) {
+		Scene.GatherShadowRequests(ShadowRequests);
+	}
 	Renderer->RenderShadowAtlas(Scene, ShadowRequests);
 	Scene.UpdateLights(Renderer);
 
