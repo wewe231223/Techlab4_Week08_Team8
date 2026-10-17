@@ -27,4 +27,5 @@ struct FShadowMapRequest {
 
 bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView);
 bool BuildSpotShadowView(const FVector& LightPosition, const FVector& LightDirection, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView);
+bool BuildRectShadowView(const FVector& LightPosition, const FVector& LightDirection, const FVector& LightRight, float HalfWidth, float HalfHeight, float AttenuationRadius, int32 Resolution, FShadowView& OutView);
 bool BuildPointShadowViews(const FVector& LightPosition, float AttenuationRadius, FShadowView (&OutViews)[PointShadowFaceCount]);

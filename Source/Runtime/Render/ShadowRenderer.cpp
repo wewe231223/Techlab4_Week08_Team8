@@ -4,6 +4,7 @@
 #include "Asset/LOD/StaticMeshLODSelector.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Scene.h"
+#include "Engine/RectLightSceneProxy.h"
 #include "Engine/SpotLightSceneProxy.h"
 #include "Mesh.h"
 #include "RenderCommand.h"
@@ -386,6 +387,10 @@ void FShadowRenderer::GatherShadowRequests(const FScene& Scene) {
 				continue;
 			}
 			Request.mViewCount = PointShadowFaceCount;
+		} else if (Type == ELightType::Rect) {
+			if (!static_cast<const FRectLightSceneProxy*>(Proxy)->BuildShadowView(Request.mViews[0])) {
+				continue;
+			}
 		} else {
 			continue;
 		}
