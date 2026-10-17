@@ -15,6 +15,7 @@ struct FShadowView {
 	FVector mWorldPosition{};
 	float mNearPlane{};
 	float mFarPlane{};
+	bool mIsOrthographic{ true };
 };
 
 struct FShadowMapRequest {
@@ -24,4 +25,5 @@ struct FShadowMapRequest {
 };
 
 bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView);
+bool BuildSpotShadowView(const FVector& LightPosition, const FVector& LightDirection, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView);
 FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FTexture2D* DepthTexture, const FShadowAtlasTile& Tile);

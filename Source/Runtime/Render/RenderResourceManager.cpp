@@ -12,7 +12,7 @@ namespace
 		FString Key = Path;
 		while (Macros && Macros->Name)
 		{
-			Key += "_" + FString(Macros->Name);
+			Key += "_" + FString(Macros->Name) + "_" + FString(Macros->Definition ? Macros->Definition : "");
 			++Macros;
 		}
 		return Key;
@@ -42,48 +42,33 @@ void FRenderResourceManager::ScanShaders(const fs::path& ShaderRoot)
 	LoadUberLit(ShaderRoot);
 }
 
-void FRenderResourceManager::LoadUberLit(const fs::path& ShaderRoot)
-{
-	const FString Path = (ShaderRoot / "UberLit.hlsl").generic_string();
+void FRenderResourceManager::LoadUberLit(const fs::path& ShaderRoot) {
+	const FString Path{ (ShaderRoot / "UberLit.hlsl").generic_string() };
 
 	// 같은 UberLit.hlsl을 매크로 조합별로 따로 컴파일한다.
-	// 캐시 키 / CSO 파일명은 "경로_매크로이름" 형태로 구분된다.
 	// 매크로 없는 기본 키("Resources/Shader/UberLit.hlsl")는 기존 머티리얼이 쓰므로 Lambert로 남겨 둔다. (셰이더 쪽 기본값)
 
-	static const D3D_SHADER_MACRO Unlit[] = { { "LIGHTING_MODEL_UNLIT", "1" },{ nullptr, nullptr } };
-	static const D3D_SHADER_MACRO Gouraud[] = { { "LIGHTING_MODEL_GOURAUD", "1" },{ nullptr, nullptr } };
-	static const D3D_SHADER_MACRO Lambert[] = { { "LIGHTING_MODEL_LAMBERT", "1" },{ nullptr, nullptr } };
-	static const D3D_SHADER_MACRO BlinnPhong[] = { { "LIGHTING_MODEL_BLINN_PHONG", "1" },{ nullptr, nullptr } };
-	static const D3D_SHADER_MACRO WorldNormal[] = { { "WORLD_NORMAL", "1" },{ nullptr, nullptr } };
-
 	LoadOrCompileShader(Path);	// 기본 (Lambert)
-	LoadOrCompileShader(Path, Unlit);
-	LoadOrCompileShader(Path, Gouraud);
-	LoadOrCompileShader(Path, Lambert);
-	LoadOrCompileShader(Path, BlinnPhong);
-	LoadOrCompileShader(Path, WorldNormal);
-
-	// 뷰모드 -> 변형 테이블. 컴파일에 실패한 키는 nullptr로 남는다(GetShaderProgram의 폴백을 쓰지 않으려고 맵을 직접 찾는다).
-	auto FindProgram = [this](const FString& Key) -> FShaderProgram*
-		{
-			TUniquePtr<FShaderProgram>* Found = ShaderProgramMap.Find(Key);
-			return Found ? Found->get() : nullptr;
-		};
-
-	UberLitDefault = FindProgram(MakeShaderKey(Path, nullptr));
-	UberLitPrograms[static_cast<int32>(EViewMode::Lit_Gouraud)] = FindProgram(MakeShaderKey(Path, Gouraud));
-	UberLitPrograms[static_cast<int32>(EViewMode::Lit_Lambert)] = FindProgram(MakeShaderKey(Path, Lambert));
-	UberLitPrograms[static_cast<int32>(EViewMode::Lit_BlinnPhong)] = FindProgram(MakeShaderKey(Path, BlinnPhong));
-	UberLitPrograms[static_cast<int32>(EViewMode::Unlit)] = FindProgram(MakeShaderKey(Path, Unlit));
-	UberLitPrograms[static_cast<int32>(EViewMode::WorldNormal)] = FindProgram(MakeShaderKey(Path, WorldNormal));
+	TUniquePtr<FShaderProgram>* DefaultProgram{ ShaderProgramMap.Find(MakeShaderKey(Path, nullptr)) };
+	UberLitDefault = DefaultProgram ? DefaultProgram->get() : nullptr;
+	const char* ModelDefines[]{ "LIGHTING_MODEL_GOURAUD", "LIGHTING_MODEL_LAMBERT", "LIGHTING_MODEL_BLINN_PHONG", "LIGHTING_MODEL_UNLIT", "WORLD_NORMAL" };
+	static_assert(std::size(ModelDefines) == static_cast<size_t>(EViewMode::Count));
+	for (uint32 PcfIndex{}; PcfIndex < 2; ++PcfIndex) {
+		for (int32 ModeIndex{}; ModeIndex < static_cast<int32>(EViewMode::Count); ++ModeIndex) {
+			const D3D_SHADER_MACRO Macros[]{ { ModelDefines[ModeIndex], "1" }, { "SHADOW_PCF", PcfIndex == 0 ? "0" : "1" }, { nullptr, nullptr } };
+			LoadOrCompileShader(Path, Macros);
+			TUniquePtr<FShaderProgram>* Program{ ShaderProgramMap.Find(MakeShaderKey(Path, Macros)) };
+			mUberLitPrograms[PcfIndex][ModeIndex] = Program ? Program->get() : nullptr;
+		}
+	}
 }
 
-FShaderProgram* FRenderResourceManager::GetUberLitProgram(EViewMode Mode)
-{
-	const int32 Index = static_cast<int32>(Mode);
-	if (Index < 0 || Index >= static_cast<int32>(EViewMode::Count))
+FShaderProgram* FRenderResourceManager::GetUberLitProgram(EViewMode Mode, bool ShadowPcfEnabled) {
+	const int32 Index{ static_cast<int32>(Mode) };
+	if (Index < 0 || Index >= static_cast<int32>(EViewMode::Count)) {
 		return nullptr;
-	return Get().UberLitPrograms[Index];
+	}
+	return Get().mUberLitPrograms[ShadowPcfEnabled ? 1 : 0][Index];
 }
 
 bool FRenderResourceManager::IsUberLitProgram(const FShaderProgram* Program)
@@ -94,10 +79,12 @@ bool FRenderResourceManager::IsUberLitProgram(const FShaderProgram* Program)
 	const FRenderResourceManager& Self = Get();
 	if (Program == Self.UberLitDefault)
 		return true;
-	for (const FShaderProgram* Variant : Self.UberLitPrograms)
-	{
-		if (Program == Variant)
-			return true;
+	for (const auto& Variants : Self.mUberLitPrograms) {
+		for (const FShaderProgram* Variant : Variants) {
+			if (Program == Variant) {
+				return true;
+			}
+		}
 	}
 	return false;
 }
@@ -109,8 +96,11 @@ void FRenderResourceManager::Shutdown()
 	Get().ComputeShaderMap.Empty();
 	Get().ShaderProgramMap.Empty();
 	Get().UberLitDefault = nullptr;
-	for (FShaderProgram*& Program : Get().UberLitPrograms)
-		Program = nullptr;
+	for (auto& Variants : Get().mUberLitPrograms) {
+		for (FShaderProgram*& Program : Variants) {
+			Program = nullptr;
+		}
+	}
 }
 
 FShaderProgram* FRenderResourceManager::GetShaderProgram(const FString& InPath, const D3D_SHADER_MACRO* Macro)

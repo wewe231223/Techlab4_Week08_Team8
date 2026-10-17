@@ -13,6 +13,8 @@ constexpr int32 InvalidShadowMapIndex{ -1 };
 constexpr int32 MinShadowMapResolution{ 128 };
 constexpr int32 MaxShadowMapResolution{ 8192 };
 constexpr uint32 ShadowMapTextureSlot{ 13 };
+constexpr uint32 ShadowMapBufferSlot{ 14 };
+constexpr uint32 ShadowMapSamplerSlot{ 1 };
 constexpr int32 DefaultShadowAtlasResolution{ 4096 };
 
 struct FShadowAtlasTile {

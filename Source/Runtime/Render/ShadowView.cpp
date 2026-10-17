@@ -98,6 +98,52 @@ bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& Caste
 	return true;
 }
 
+bool BuildSpotShadowView(const FVector& LightPosition, const FVector& LightDirection, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView) {
+	if (!IsFiniteShadowVector(LightPosition) || !IsFiniteShadowVector(LightDirection) || !std::isfinite(OuterConeAngle) || OuterConeAngle <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
+		return false;
+	}
+
+	const float DirectionLengthSquared{ LightDirection.SizeSquared() };
+	if (!std::isfinite(DirectionLengthSquared) || DirectionLengthSquared < 1.0e-8f) {
+		return false;
+	}
+
+	const FVector Forward{ LightDirection / std::sqrt(DirectionLengthSquared) };
+	const FVector ReferenceUp{ std::abs(Forward.Z) < 0.99f ? FVector{ 0.0f, 0.0f, 1.0f } : FVector{ 0.0f, 1.0f, 0.0f } };
+	const FVector Right{ FVector::Cross(ReferenceUp, Forward).GetSafeNormal() };
+	const FVector Up{ FVector::Cross(Forward, Right) };
+	const float SafeOuterAngle{ std::clamp(OuterConeAngle, 0.1f, 89.0f) };
+	const float NearPlane{ std::min(0.01f, AttenuationRadius * 0.01f) };
+	const float ProjectionScale{ 1.0f / std::tan(FMath::DegreesToRadians(SafeOuterAngle)) };
+	const float DepthScale{ AttenuationRadius / (AttenuationRadius - NearPlane) };
+	const FMatrix View{
+		Forward.X, Right.X, Up.X, 0.0f,
+		Forward.Y, Right.Y, Up.Y, 0.0f,
+		Forward.Z, Right.Z, Up.Z, 0.0f,
+		-FVector::Dot(LightPosition, Forward), -FVector::Dot(LightPosition, Right), -FVector::Dot(LightPosition, Up), 1.0f
+	};
+	const FMatrix Projection{
+		0.0f, 0.0f, DepthScale, 1.0f,
+		ProjectionScale, 0.0f, 0.0f, 0.0f,
+		0.0f, ProjectionScale, 0.0f, 0.0f,
+		0.0f, 0.0f, -NearPlane * DepthScale, 0.0f
+	};
+
+	FShadowView Result{};
+	Result.mView = View;
+	Result.mProjection = Projection;
+	Result.mViewProjection = View * Projection;
+	if (NearPlane <= 0.0f || !IsFiniteShadowMatrix(Result.mViewProjection)) {
+		return false;
+	}
+	Result.mWorldPosition = LightPosition;
+	Result.mNearPlane = NearPlane;
+	Result.mFarPlane = AttenuationRadius;
+	Result.mIsOrthographic = false;
+	OutView = Result;
+	return true;
+}
+
 FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FTexture2D* DepthTexture, const FShadowAtlasTile& Tile) {
 	FShadowMapRenderParameters Parameters{};
 	if (!DepthTexture || !DepthTexture->GetSRV() || !DepthTexture->GetDSV() || Tile.mResolution == 0 || Tile.mResolution > DepthTexture->GetWidth() || Tile.mResolution > DepthTexture->GetHeight() || Tile.mX > DepthTexture->GetWidth() - Tile.mResolution || Tile.mY > DepthTexture->GetHeight() - Tile.mResolution) {

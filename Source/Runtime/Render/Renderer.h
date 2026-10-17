@@ -22,14 +22,14 @@ struct FPerObjectConstants
 	FMatrix World;
 	// (World^-1)^T. 비균등 스케일에서도 노멀이 표면에 수직으로 남도록 노멀 변환에 쓴다.
 	FMatrix NormalMatrix;
+	uint32 mReceiveShadows{ 1 };
+	uint32 mPadding[3]{};
 };
+static_assert(sizeof(FPerObjectConstants) == 144);
+static_assert(offsetof(FPerObjectConstants, mReceiveShadows) == 128);
 
 // 오브젝트 칸 하나를 채운다. 프록시는 WorldToLocal을 이미 들고 있어 역행렬 계산을 건너뛸 수 있다.
-inline void WritePerObjectConstants(uint8* Dest, const FMatrix& World, const FMatrix& WorldToLocal)
-{
-	const FPerObjectConstants Constants{ World, WorldToLocal.GetTransposed() };
-	std::memcpy(Dest, &Constants, sizeof(Constants));
-}
+void WritePerObjectConstants(uint8* Dest, const FMatrix& World, const FMatrix& WorldToLocal, bool ReceiveShadows = true);
 
 // b0(ViewConstants)와 바이트 단위로 같아야 한다. View마다 RenderQueueSorting에서 한 번 올린다.
 struct alignas(16) FViewConstants
@@ -41,6 +41,7 @@ struct alignas(16) FViewConstants
 static_assert(sizeof(FViewConstants) == 80, "UberLit.hlsl cbuffer ViewConstants 크기와 맞아야 한다");
 
 constexpr uint32 MaxLocalLights = 1024;
+constexpr uint32 DirectionalLightBufferSlot{ 15 };
 
 // 컬링 방식별 셀 크기. Tiled는 슬라이스 1개인 Clustered와 같다.
 constexpr uint32 TiledTileSize = 16;
@@ -101,11 +102,13 @@ struct FRectLightInfo
 struct alignas(16) FLightingConstants
 {
 	FAmbientLightInfo Ambient;
-	FDirectionalLightInfo Directional;
 	uint32 NumLocalLights;
-	uint32 Padding[3];
+	uint32 mNumShadowMaps{};
+	uint32 mNumDirectionalLights{};
+	uint32 Padding{};
 };
-static_assert(sizeof(FLightingConstants) == 64);
+static_assert(sizeof(FLightingConstants) == 32);
+static_assert(offsetof(FLightingConstants, mNumDirectionalLights) == 24);
 
 static_assert(sizeof(FAmbientLightInfo) == 16);
 static_assert(sizeof(FDirectionalLightInfo) == 32);
@@ -194,6 +197,7 @@ public:
 	FTexture2D* GetShadowDepthTexture() const;
 	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
 	const FShadowMapRenderParameters* GetShadowMapRenderParameters(const ULightComponent* LightComponent) const;
+	int32 GetShadowMapIndex(const ULightComponent* LightComponent) const;
 
 	// 기존 단일 카메라의 ViewProjection으로 렌더 큐 전체를 그린다.
 	void RenderAll(FRenderQueue& InQueue, UCameraComponent* CameraComponent);
@@ -232,10 +236,11 @@ public:
 	void EndObjectConstants();
 
 	//void SetFireBallLight(const FFireBallLightConstants& LightConstants);
-	void SetLighting(FLightingConstants& LightingConstants, const TArray<FLightRenderParameters>& InLocalLights);
+	void SetLighting(FLightingConstants& LightingConstants, const TArray<FDirectionalLightInfo>& InDirectionalLights, const TArray<FLightRenderParameters>& InLocalLights);
 
 	// 이후 그리는 UberLit 머티리얼이 쓸 조명 모델. View마다 RenderOpaque 전에 설정한다.
 	void SetViewMode(EViewMode InViewMode);
+	void SetShadowPcfEnabled(bool Enabled);
 	EViewMode GetViewMode() const { return CurrentViewMode; }
 
 	// DepthTexture는 Tiled25D에서만 쓴다. 이때는 DSV에서 풀린 상태(RenderDepth 뒤 EndRenderPass)여야 한다.
@@ -247,10 +252,11 @@ public:
 	ELightCullingMode GetLightCullingMode() const { return LightCullingMode; }
 private:
 	bool InitializeShadowPass();
+	void BindShadowMaps();
 	void DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile);
 	void DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProjection);
 	void DrawStaticGroups();
-	void UpdatePerObjectConstants(const FMatrix& World);
+	void UpdatePerObjectConstants(const FMatrix& World, bool ReceiveShadows = true);
 	void BindMaterial(UMaterial* Material);
 	void UpdateMaterialParams(const FRenderPacket& RenderPacket);
 	void UpdatePerObjectConstants(const FRenderPacket& RenderPacket, const FMatrix& ViewProjection);
@@ -262,6 +268,7 @@ private:
 	FRenderQueue mShadowRenderQueue{};
 	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
 	TMap<const ULightComponent*, int32> mShadowMapIndices{};
+	TUniquePtr<FStructuredBuffer> mShadowMapBuffer{};
 	FShaderProgram* mShadowShader{};
 	TUniquePtr<FConstantBuffer> mShadowViewCB{};
 	TUniquePtr<FConstantBuffer> mShadowObjectCB{};
@@ -312,7 +319,9 @@ private:
 
 	TUniquePtr<FStructuredBuffer> TileIndexBuffer{};
 	TUniquePtr<FStructuredBuffer> LocalLightBuffer{};
+	TUniquePtr<FStructuredBuffer> mDirectionalLightBuffer{};
 	uint32 NumLocalLightsThisFrame = 0;
 
 	EViewMode CurrentViewMode = EViewMode::Lit_Lambert;
+	bool mShadowPcfEnabled{};
 };

@@ -157,6 +157,11 @@ namespace
 	}
 }
 
+void WritePerObjectConstants(uint8* Dest, const FMatrix& World, const FMatrix& WorldToLocal, bool ReceiveShadows) {
+	const FPerObjectConstants Constants{ World, WorldToLocal.GetTransposed(), ReceiveShadows ? 1u : 0u };
+	std::memcpy(Dest, &Constants, sizeof(Constants));
+}
+
 bool FRenderer::Init()
 {
 	bUsePerObjectSlots = RenderCommand::SupportsConstantBufferOffsets();
@@ -228,7 +233,7 @@ void FRenderer::UploadPerObjectConstants()
 		FRenderPacket& P = RenderPackets[Index];
 		const FMatrix& Model = GetPacketWorld(P);
 		const FMatrix WorldToLocal = P.Proxy ? P.Proxy->GetWorldToLocal() : Model.Inverse();
-		WritePerObjectConstants(Dest + static_cast<size_t>(Index) * ObjectSlotBytes, Model, WorldToLocal);
+		WritePerObjectConstants(Dest + static_cast<size_t>(Index) * ObjectSlotBytes, Model, WorldToLocal, !P.Proxy || P.Proxy->ReceivesShadows());
 		P.Slot = Index;
 	}
 
@@ -251,7 +256,9 @@ void FRenderer::RenderAll(FRenderQueue& InQueue, const FMatrix& ViewProjection, 
 
 void FRenderer::RenderOpaque(const FMatrix& ViewProjection)
 {
+	BindShadowMaps();
 	RenderCommand::BindConstantBuffer(4, LightingCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
+	RenderCommand::BindShaderResource(DirectionalLightBufferSlot, mDirectionalLightBuffer.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(10, LocalLightBuffer.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(12, TileIndexBuffer.get(), EShaderBindFlagBits::Pixel);
 	RenderCommand::BindConstantBuffer(5, GridLightingCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
@@ -263,7 +270,9 @@ void FRenderer::RenderOpaque(const FMatrix& ViewProjection)
 // RenderOpaque가 남긴 반투명 패킷을 먼 것부터 그린다.
 void FRenderer::RenderTranslucent(const FMatrix& ViewProjection)
 {
+	BindShadowMaps();
 	RenderCommand::BindConstantBuffer(4, LightingCB.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
+	RenderCommand::BindShaderResource(DirectionalLightBufferSlot, mDirectionalLightBuffer.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(10, LocalLightBuffer.get(), EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Vertex);
 	RenderCommand::BindShaderResource(12, TileIndexBuffer.get(), EShaderBindFlagBits::Pixel);
 	// 2.5D 목록은 불투명 깊이 범위만 담으므로, 불투명보다 앞에 있는 반투명은 전체 순회로 그린다.
@@ -302,12 +311,12 @@ void FRenderer::DrawStaticGroups()
 		{
 			if (bUsePerObjectSlots && Item.Slot != InvalidObjectSlot)
 			{
-				RenderCommand::BindConstantBufferRange(2, PerObjectSlotCB.get(), Item.Slot * PerObjectSlotConstants, PerObjectSlotConstants, EShaderBindFlagBits::Vertex);
+				RenderCommand::BindConstantBufferRange(2, PerObjectSlotCB.get(), Item.Slot * PerObjectSlotConstants, PerObjectSlotConstants, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 			}
 			else
 			{
-				RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
-				UpdatePerObjectConstants(Item.Proxy->GetLocalToWorld());
+				RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
+				UpdatePerObjectConstants(Item.Proxy->GetLocalToWorld(), Item.Proxy->ReceivesShadows());
 			}
 			RenderCommand::DrawIndexed(Item.IndexCount, Item.StartIndex);
 		}
@@ -400,11 +409,11 @@ void FRenderer::DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProject
 			UpdateMaterialParams(RenderPacket);
 		if (bUsePerObjectSlots && RenderPacket.Slot != InvalidObjectSlot)
 		{
-			RenderCommand::BindConstantBufferRange(2, PerObjectSlotCB.get(), RenderPacket.Slot * PerObjectSlotConstants, PerObjectSlotConstants, EShaderBindFlagBits::Vertex);
+			RenderCommand::BindConstantBufferRange(2, PerObjectSlotCB.get(), RenderPacket.Slot * PerObjectSlotConstants, PerObjectSlotConstants, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 		}
 		else
 		{
-			RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
+			RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 			UpdatePerObjectConstants(RenderPacket, ViewProjection);
 		}
 
@@ -483,7 +492,7 @@ FOcclusionMeasureResult FRenderer::MeasureOpaqueOcclusion(const FMatrix& ViewPro
 
 	RenderCommand::BindConstantBuffer(0, ViewCB.get(), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 	if (!bUsePerObjectSlots)
-		RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
+		RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 
 	UStaticMesh* BoundMesh = nullptr;
 	UMaterial* BoundMaterial = nullptr;
@@ -507,11 +516,10 @@ FOcclusionMeasureResult FRenderer::MeasureOpaqueOcclusion(const FMatrix& ViewPro
 			UpdateMaterialParams(*Draw.Packet);
 
 		if (bUsePerObjectSlots && Draw.Slot != InvalidObjectSlot)
-			RenderCommand::BindConstantBufferRange(2, PerObjectSlotCB.get(),
-				Draw.Slot * PerObjectSlotConstants, PerObjectSlotConstants, EShaderBindFlagBits::Vertex);
+			RenderCommand::BindConstantBufferRange(2, PerObjectSlotCB.get(), Draw.Slot * PerObjectSlotConstants, PerObjectSlotConstants, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 		else
 		{
-			RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex);
+			RenderCommand::BindConstantBuffer(2, PerObjectCB.get(), EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel);
 			UpdatePerObjectConstants(*Draw.World);
 		}
 
@@ -593,7 +601,7 @@ void FRenderer::EndObjectConstants()
 void FRenderer::BindMaterial(UMaterial* Material) {
 	FShaderProgram* Program{ Material->Shader };
 	if (FRenderResourceManager::IsUberLitProgram(Program)) {
-		if (FShaderProgram* Variant{ FRenderResourceManager::GetUberLitProgram(CurrentViewMode) }) {
+		if (FShaderProgram* Variant{ FRenderResourceManager::GetUberLitProgram(CurrentViewMode, mShadowPcfEnabled) }) {
 			Program = Variant;
 		}
 	}
@@ -662,19 +670,23 @@ void FRenderer::UpdatePerObjectConstants(const FRenderPacket& RenderPacket, cons
 	// rp.Transform 과 Camera VP 행렬 곱
 	// 행렬곱의 결과 (MVP Matrix) Constant Buffer 업데이트 필요
 
-	UpdatePerObjectConstants(GetPacketWorld(RenderPacket));
+	UpdatePerObjectConstants(GetPacketWorld(RenderPacket), !RenderPacket.Proxy || RenderPacket.Proxy->ReceivesShadows());
 }
 
-void FRenderer::UpdatePerObjectConstants(const FMatrix& World)
-{
-	FPerObjectConstants Constants;
+void FRenderer::UpdatePerObjectConstants(const FMatrix& World, bool ReceiveShadows) {
+	FPerObjectConstants Constants{};
 
 	Constants.World = World;
 	Constants.NormalMatrix = World.Inverse().GetTransposed();
+	Constants.mReceiveShadows = ReceiveShadows ? 1u : 0u;
 
 	RenderCommand::UpdateBufferData(PerObjectCB.get(), &Constants);
 }
 
+
+void FRenderer::SetShadowPcfEnabled(bool Enabled) {
+	mShadowPcfEnabled = Enabled;
+}
 
 void FRenderer::SetViewMode(EViewMode InViewMode)
 {
@@ -685,8 +697,16 @@ void FRenderer::SetViewMode(EViewMode InViewMode)
 	LastMaterial = nullptr;
 }
 
-void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<FLightRenderParameters>& InLocalLights)
-{
+void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<FDirectionalLightInfo>& InDirectionalLights, const TArray<FLightRenderParameters>& InLocalLights) {
+	const uint32 DirectionalCount{ static_cast<uint32>(InDirectionalLights.Num()) };
+	if (DirectionalCount > 0 && (!mDirectionalLightBuffer || mDirectionalLightBuffer->GetMaxCount() < DirectionalCount)) {
+		mDirectionalLightBuffer = RenderCommand::CreateDynamicStructuredBuffer(sizeof(FDirectionalLightInfo), DirectionalCount);
+	}
+	LightingConstants.mNumDirectionalLights = mDirectionalLightBuffer && mDirectionalLightBuffer->GetBuffer() && mDirectionalLightBuffer->GetSRV() ? DirectionalCount : 0;
+	if (LightingConstants.mNumDirectionalLights > 0) {
+		RenderCommand::UpdateBufferData(mDirectionalLightBuffer.get(), InDirectionalLights.GetData(), DirectionalCount * sizeof(FDirectionalLightInfo));
+	}
+
 	NumLocalLightsThisFrame = std::min<uint32>(InLocalLights.Num(), LocalLightBuffer->GetMaxCount());
 	if (NumLocalLightsThisFrame < static_cast<uint32>(InLocalLights.Num()))
 		HTR_LOG(Warning, "Local lights exceed capacity: {} / {}", InLocalLights.Num(), NumLocalLightsThisFrame);
@@ -696,6 +716,7 @@ void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<
 			NumLocalLightsThisFrame * sizeof(FLightRenderParameters));
 
 	LightingConstants.NumLocalLights = NumLocalLightsThisFrame;
+	LightingConstants.mNumShadowMaps = mShadowMapReady ? static_cast<uint32>(mShadowMapRenderParameters.Num()) : 0;
 	RenderCommand::UpdateBufferData(LightingCB.get(), &LightingConstants, sizeof(FLightingConstants));
 
 	// CullLights 전에는 NumTilesX = 0으로 두어 PS가 셀 버퍼 대신 전체 순회를 쓰게 한다.
@@ -829,6 +850,13 @@ bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>
 	if (TileCount == 0 || !InitializeShadowPass() || !mShadowMapResource.Initialize(static_cast<int32>(Size))) {
 		return false;
 	}
+	const uint32 ParameterCount{ static_cast<uint32>(Requests.Num()) };
+	if (!mShadowMapBuffer || mShadowMapBuffer->GetMaxCount() < ParameterCount) {
+		mShadowMapBuffer = RenderCommand::CreateDynamicStructuredBuffer(sizeof(FShadowMapRenderParameters), ParameterCount);
+	}
+	if (!mShadowMapBuffer || !mShadowMapBuffer->GetBuffer() || !mShadowMapBuffer->GetSRV()) {
+		return false;
+	}
 
 	FTexture2D* DepthTexture{ mShadowMapResource.GetDepthTexture() };
 	RenderCommand::UnbindShaderResource(ShadowMapTextureSlot, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Compute);
@@ -859,7 +887,18 @@ bool FRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>
 		mShadowMapReady = true;
 	}
 	RenderCommand::EndRenderPass(PassInfo);
+	RenderCommand::UpdateBufferData(mShadowMapBuffer.get(), mShadowMapRenderParameters.GetData(), ParameterCount * sizeof(FShadowMapRenderParameters));
 	return mShadowMapReady;
+}
+
+void FRenderer::BindShadowMaps() {
+	if (FTexture2D* Texture{ GetShadowDepthTexture() }) {
+		RenderCommand::BindShaderResource(ShadowMapTextureSlot, Texture, EShaderBindFlagBits::Pixel);
+	} else {
+		RenderCommand::UnbindShaderResource(ShadowMapTextureSlot, EShaderBindFlagBits::Pixel);
+	}
+	RenderCommand::BindShaderResource(ShadowMapBufferSlot, mShadowMapReady ? mShadowMapBuffer.get() : nullptr, EShaderBindFlagBits::Pixel);
+	RenderCommand::BindSamplerState(ShadowMapSamplerSlot, ESamplerState::ShadowComparison, EShaderBindFlagBits::Pixel);
 }
 
 void FRenderer::DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile) {
@@ -893,6 +932,11 @@ const TArray<FShadowMapRenderParameters>& FRenderer::GetShadowMapRenderParameter
 }
 
 const FShadowMapRenderParameters* FRenderer::GetShadowMapRenderParameters(const ULightComponent* LightComponent) const {
+	const int32 Index{ GetShadowMapIndex(LightComponent) };
+	return Index != InvalidShadowMapIndex ? &mShadowMapRenderParameters[Index] : nullptr;
+}
+
+int32 FRenderer::GetShadowMapIndex(const ULightComponent* LightComponent) const {
 	const int32* Index{ mShadowMapIndices.Find(LightComponent) };
-	return mShadowMapReady && Index ? &mShadowMapRenderParameters[*Index] : nullptr;
+	return mShadowMapReady && Index ? *Index : InvalidShadowMapIndex;
 }

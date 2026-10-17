@@ -408,6 +408,7 @@ void UEditorEngine::RenderMultipleViewports()
 	UWorld* CapturedWorld = nullptr;
 	Renderer->SetLightDebugMode(SettingsPanel->GetSettings().LightDebugMode);
 	Renderer->SetLightCullingMode(static_cast<ELightCullingMode>(SettingsPanel->GetSettings().LightCullingMode));
+	Renderer->SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)
 	{
 		const bool bActive = MultipleViewportsAdapter.IsViewActive(ViewIndex);
@@ -422,7 +423,6 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.CaptureWorld(*ViewWorld);
 			// FireBall 라이트 상수는 Renderer 공용 상태라 월드가 바뀌면 다시 올린다.
 			// ViewWorld->GetScene().UpdateFireBallLight(Renderer);
-			ViewWorld->GetScene().UpdateLights(Renderer);
 			CapturedWorld = ViewWorld;
 		}
 
@@ -453,7 +453,6 @@ void UEditorEngine::RenderMultipleViewports()
 			SCOPE_CYCLE_COUNTER(STAT_CaptureWorld);
 			MultipleViewportsAdapter.CaptureWorld(*ViewWorld);
 			//ViewWorld->GetScene().UpdateFireBallLight(Renderer);
-			ViewWorld->GetScene().UpdateLights(Renderer);
 			CapturedWorld = ViewWorld;
 		}
 
@@ -954,6 +953,7 @@ void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const 
 	TArray<FShadowMapRequest> ShadowRequests{};
 	Scene.GatherShadowRequests(ShadowRequests);
 	Renderer->RenderShadowAtlas(Scene, ShadowRequests);
+	Scene.UpdateLights(Renderer);
 
 	RenderOpaquePass(ViewIndex, ViewRenderingInfo, ViewProjection, ViewCameraLocation, ViewCameraForward, RenderQueue);
 

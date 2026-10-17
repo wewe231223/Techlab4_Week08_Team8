@@ -3,6 +3,10 @@
 #include "ColorSpace.hlsli"
 #include "ShadowCommon.hlsli"
 
+#ifndef SHADOW_PCF
+#define SHADOW_PCF 0
+#endif
+
 #define LIGHT_TYPE_POINT 1   // C++ ELightType과 같아야 함
 #define LIGHT_TYPE_SPOT  2
 #define LIGHT_TYPE_RECT  3
@@ -84,6 +88,8 @@ cbuffer PerObjectConstants : register(b2)
 {
     matrix World;
     matrix WorldInverseTranspose; // (World^-1)^T
+    uint mReceiveShadows;
+    uint3 ObjectPadding;
 };
 
 // b3는 FireBall이 쓰는 동안 비워 둔다.
@@ -91,9 +97,10 @@ cbuffer PerObjectConstants : register(b2)
 cbuffer Lighting : register(b4)
 {
     FAmbientLightInfo Ambient;
-    FDirectionalLightInfo Directional;
     uint NumLocalLights;
-    uint3 LightingPadding;
+    uint NumShadowMaps;
+    uint NumDirectionalLights;
+    uint LightingPadding;
 };
 
 
@@ -115,6 +122,10 @@ cbuffer LightGrid : register(b5)
 StructuredBuffer<FLightRenderParameters> LocalLights : register(t10);
 // 셀마다 [개수][라이트 번호 x MAX_LIGHTS_PER_CELL] 형태로 CELL_STRIDE칸씩 이어져 있다.
 StructuredBuffer<uint> CellLightIndices : register(t12);
+Texture2D<float> ShadowAtlas : register(t13);
+StructuredBuffer<FShadowMapRenderParameters> ShadowMaps : register(t14);
+StructuredBuffer<FDirectionalLightInfo> DirectionalLights : register(t15);
+SamplerComparisonState ShadowSampler : register(s1);
 
 Texture2D DiffuseTexture : register(t0);
 Texture2D NormalTexture : register(t1);
@@ -149,6 +160,44 @@ struct FLightContribution
     float3 Diffuse;
     float3 Specular;
 };
+
+float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
+    if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps) {
+        return 1.0f;
+    }
+
+    const FShadowMapRenderParameters Parameters = { ShadowMaps[ShadowIndex] };
+    if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f)) {
+        return 1.0f;
+    }
+
+    const float4 LightClip = { mul(float4(WorldPos + Normal * Parameters.mNormalBias, 1.0f), Parameters.mLightViewProjection) };
+    if (LightClip.w <= 0.0f) {
+        return 1.0f;
+    }
+    const float3 LightPosition = { LightClip.xyz / LightClip.w };
+    if (any(abs(LightPosition.xy) > 1.0f) || LightPosition.z < 0.0f || LightPosition.z > 1.0f) {
+        return 1.0f;
+    }
+
+    const float2 ShadowUv = { LightPosition.xy * float2(0.5f, -0.5f) + 0.5f };
+    const float ComparisonDepth = { min(LightPosition.z - Parameters.mDepthBias, 1.0f) };
+#if SHADOW_PCF
+    const float2 ShadowTexelSize = { Parameters.mTexelSize / Parameters.mUvScaleBias.xy };
+    float Visibility = { 0.0f };
+    [unroll]
+    for (int Y = { -1 }; Y <= 1; ++Y) {
+        [unroll]
+        for (int X = { -1 }; X <= 1; ++X) {
+            const float2 AtlasUv = { GetShadowAtlasUv(ShadowUv + float2(X, Y) * ShadowTexelSize, Parameters) };
+            Visibility += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ComparisonDepth);
+        }
+    }
+    return Visibility / 9.0f;
+#else
+    return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, GetShadowAtlasUv(ShadowUv, Parameters), ComparisonDepth);
+#endif
+}
 
 // 원뿔 감쇠량. 0(Outer 밖) ~ 1(Inner 안)
 float GetSpotConeAttenuation(FLightRenderParameters Light, float3 L)
@@ -195,10 +244,19 @@ float3 GetAmbientLighting()
 }
 
 // Directional Light의 영향을 구한다
-FLightContribution CalcDirectionalLight(float3 N, float3 V, float InShininess)
-{
-    const float3 Radiance = Directional.Color * Directional.Intensity;
-    return SurfaceShading(N, -Directional.Direction, V, Radiance, InShininess);
+FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, float3 V, float3 WorldPos, float InShininess) {
+    const float3 Radiance = { Light.Color * Light.Intensity * CastShadow(Light.mShadowIndex, WorldPos, N) };
+    return SurfaceShading(N, -Light.Direction, V, Radiance, InShininess);
+}
+
+FLightContribution AccumulateDirectionalLighting(float3 N, float3 V, float3 WorldPos, float InShininess) {
+    FLightContribution Total = { (FLightContribution) 0 };
+    for (uint Index = { 0 }; Index < NumDirectionalLights; ++Index) {
+        const FLightContribution Contribution = { CalcDirectionalLight(DirectionalLights[Index], N, V, WorldPos, InShininess) };
+        Total.Diffuse += Contribution.Diffuse;
+        Total.Specular += Contribution.Specular;
+    }
+    return Total;
 }
 
 // 해당 WorldPos에서 PointLight 하나의 영향(밝기)을 구한다
@@ -267,8 +325,32 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
         Result = CalcRectLight(Light, N, V, WorldPos, InShininess);
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
+#if !defined(LIGHTING_MODEL_GOURAUD)
+    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
+    Result.Diffuse *= Visibility;
+    Result.Specular *= Visibility;
+#endif
     return Result;
 }
+
+#if defined(LIGHTING_MODEL_GOURAUD)
+bool HasSpotShadow(FLightRenderParameters Light) {
+    return mReceiveShadows != 0 && Light.Type == LIGHT_TYPE_SPOT && Light.mShadowIndex >= 0 && (uint) Light.mShadowIndex < NumShadowMaps;
+}
+
+FLightContribution AccumulateShadowedSpotLighting(float3 N, float3 V, float3 WorldPos) {
+    FLightContribution Total = { (FLightContribution) 0 };
+    for (uint Index = { 0 }; Index < NumLocalLights; ++Index) {
+        const FLightRenderParameters Light = { LocalLights[Index] };
+        if (!HasSpotShadow(Light)) {
+            continue;
+        }
+        const FLightContribution Contribution = { CalcSpotLight(Light, N, V, WorldPos, 1.0f) };
+        Total.Diffuse += Contribution.Diffuse * CastShadow(Light.mShadowIndex, WorldPos, N);
+    }
+    return Total;
+}
+#endif
 
 // 픽셀이 속한 깊이 슬라이스 번호
 uint GetSliceIndex(float4 SvPosition)
@@ -312,8 +394,11 @@ float3 GetHeatmapColor(uint LightCount)
 // VS(Gouraud)는 픽셀 위치가 없어 셀을 쓸 수 없으므로 false로 호출한다.
 FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid)
 {
-    // Directional Light는 처음에 한 번만 계산
-    FLightContribution Total = CalcDirectionalLight(N, V, InShininess);
+#if defined(LIGHTING_MODEL_GOURAUD)
+    FLightContribution Total = { (FLightContribution) 0 };
+#else
+    FLightContribution Total = { AccumulateDirectionalLighting(N, V, WorldPos, InShininess) };
+#endif
 
     uint LightCount = NumLocalLights;
     uint CellOffset = 0;
@@ -333,6 +418,11 @@ FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos,
     for (uint Index = 0; Index < LightCount; ++Index)
     {
         const uint LightIndex = bUseCellList ? CellLightIndices[CellOffset + 1 + Index] : Index;
+#if defined(LIGHTING_MODEL_GOURAUD)
+        if (HasSpotShadow(LocalLights[LightIndex])) {
+            continue;
+        }
+#endif
         const FLightContribution LightContribution = CalcLocalLight(LocalLights[LightIndex], N, V, WorldPos, InShininess);
         Total.Diffuse += LightContribution.Diffuse;
         Total.Specular += LightContribution.Specular;
@@ -408,13 +498,15 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
     float3 DiffuseLighting = { GetAmbientLighting() };
     float3 SpecularLighting = { 0.0f, 0.0f, 0.0f };
 
-#if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
     const float3 V = { normalize(CameraWorldPos - Input.WorldPos) };
+#if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
     const FLightContribution Contribution = { AccumulateDirectLighting(N, V, Input.WorldPos, Shininess, Input.SvPosition, true) };
     DiffuseLighting += Contribution.Diffuse;
     SpecularLighting = Contribution.Specular;
 #elif LIGHTING_MODEL_GOURAUD
-    DiffuseLighting += Input.VertexDiffuse;
+    const FLightContribution DirectionalContribution = { AccumulateDirectionalLighting(VertexNormal, V, Input.WorldPos, 1.0f) };
+    const FLightContribution SpotContribution = { AccumulateShadowedSpotLighting(VertexNormal, V, Input.WorldPos) };
+    DiffuseLighting += Input.VertexDiffuse + DirectionalContribution.Diffuse + SpotContribution.Diffuse;
 #endif
 
     return float4(Albedo.rgb * DiffuseLighting + SpecularLighting, Alpha);

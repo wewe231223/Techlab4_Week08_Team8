@@ -20,6 +20,7 @@ struct FEditorSettings
 	bool bDrawBatchLine = true;
 	bool bDrawPSGrid = false;
 	bool bEnableFXAA = true;
+	bool mEnableShadowPcf{};
 	float Exposure = 1.0f;	// 톤 매핑 전에 HDR 색에 곱하는 노출 값
 	bool bDepthView = false;
 	bool bExponentialHeightFog = true;

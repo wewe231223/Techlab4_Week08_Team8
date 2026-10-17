@@ -7,6 +7,7 @@
 #include "Components/RectLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Asset/LOD/StaticMeshLODSelector.h"
+#include "Engine/SpotLightSceneProxy.h"
 #include "Render/ShadowView.h"
 
 #include <algorithm>
@@ -189,21 +190,22 @@ void FScene::UpdateLights(FRenderer* Renderer)
 		break;
 	}
 
-	for (FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies)
-	{
-		if (!Proxy->IsVisible()) continue;
-		FLightRenderParameters P;
-		Proxy->GetLightShaderParameters(P);
-		Constants.Directional.Direction = P.Direction;
-		Constants.Directional.Color = P.Color;
-		Constants.Directional.Intensity = P.Intensity;
-		break;                                            // 셰이더는 하나만 받음
+	TArray<FDirectionalLightInfo> DirectionalLights{};
+	DirectionalLights.Reserve(DirectionalLightProxies.Num());
+	for (const FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies) {
+		if (!Proxy || !Proxy->IsVisible()) {
+			continue;
+		}
+		FLightRenderParameters Parameters{};
+		Proxy->GetLightShaderParameters(Parameters);
+		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowMapIndex(Proxy->GetLightComponent()) });
 	}
 
 	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
 	{
 		FLightRenderParameters& P = LocalLightParameters[Proxy->PackedIndex];
 		Proxy->GetLightShaderParameters(P);
+		P.mShadowIndex = Renderer->GetShadowMapIndex(Proxy->GetLightComponent());
 		if (!Proxy->IsVisible())
 			P.Radius = 0.0f;                              // 칸은 유지하고 영향만 없앤다
 			/*FTransform Transform;
@@ -259,7 +261,7 @@ void FScene::UpdateLights(FRenderer* Renderer)
 		}*/
 	}
 
-	Renderer->SetLighting(Constants, LocalLightParameters);
+	Renderer->SetLighting(Constants, DirectionalLights, LocalLightParameters);
 }
 
 void FScene::AddFogInfo(uint32 Id, const FFogInfo& FogInfo)
@@ -398,15 +400,24 @@ void FScene::MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy)
 
 void FScene::GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests) const {
 	OutRequests.Reset();
+	OutRequests.Reserve(DirectionalLightProxies.Num() + LocalLightProxies.Num());
 	FBox CasterBounds{};
-	if (DirectionalLightProxies.IsEmpty() || !GatherShadowCasterBounds(CasterBounds)) {
-		return;
+	if (!DirectionalLightProxies.IsEmpty() && GatherShadowCasterBounds(CasterBounds)) {
+		for (const FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies) {
+			FShadowView View{};
+			if (Proxy && Proxy->BuildShadowView(CasterBounds, View)) {
+				OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings(), Proxy->GetLightComponent() });
+			}
+		}
 	}
 
-	OutRequests.Reserve(DirectionalLightProxies.Num());
-	for (const FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies) {
+	for (const FLocalLightSceneProxy* Proxy : LocalLightProxies) {
+		if (!Proxy || Proxy->GetLightComponent()->GetLightType() != ELightType::Spot) {
+			continue;
+		}
+		const FSpotLightSceneProxy* SpotProxy{ static_cast<const FSpotLightSceneProxy*>(Proxy) };
 		FShadowView View{};
-		if (Proxy && Proxy->BuildShadowView(CasterBounds, View)) {
+		if (SpotProxy->BuildShadowView(View)) {
 			OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings(), Proxy->GetLightComponent() });
 		}
 	}
@@ -444,7 +455,7 @@ void FScene::GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View
 	LODView.CameraForward = FVector{ View.mView.M[0][0], View.mView.M[1][0], View.mView.M[2][0] };
 	LODView.ProjectionScaleSquared = ProjectionScale * ProjectionScale;
 	LODView.NearZ = View.mNearPlane;
-	LODView.bOrthographic = true;
+	LODView.bOrthographic = View.mIsOrthographic;
 	LODView.ViewProjection = View.mViewProjection;
 	LODView.Prepare();
 

@@ -2,9 +2,13 @@
 
 #include "PointLightSceneProxy.h"
 
-class FSpotLightSceneProxy : public FPointLightSceneProxy
-{
+struct FShadowView;
+
+class FSpotLightSceneProxy : public FPointLightSceneProxy {
 public:
-    using FPointLightSceneProxy::FPointLightSceneProxy;
-    virtual void GetLightShaderParameters(FLightRenderParameters& Out) const override;
+	using FPointLightSceneProxy::FPointLightSceneProxy;
+
+public:
+	void GetLightShaderParameters(FLightRenderParameters& Out) const override;
+	bool BuildShadowView(FShadowView& OutView) const;
 };

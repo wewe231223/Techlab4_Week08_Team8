@@ -108,7 +108,7 @@ FString RenderUtil::GetCsoPath(const FString& ShaderPath, EShaderType ShaderType
 	FString MacroSuffix;
 	while (Macros && Macros->Name)
 	{
-		MacroSuffix += FString("_") + Macros->Name;
+		MacroSuffix += FString{ "_" } + Macros->Name + "_" + (Macros->Definition ? Macros->Definition : "");
 		Macros++;
 	}
 
