@@ -2,7 +2,6 @@
 
 #include <d3d11_1.h>
 #include "RenderStates.h"
-#include "ShadowMap.h"
 #include "Core/EngineString.h"
 
 class FVertexBuffer;
@@ -56,7 +55,6 @@ public:
 	TUniquePtr<FShaderProgram> CreateShader(const wchar_t* FileName, D3D11_INPUT_ELEMENT_DESC* InLayoutDesc, size_t InLayoutSize);
 
 	ID3D11RasterizerState* GetRasterizerState(ERasterizerState State) const;
-	ID3D11RasterizerState* GetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) const;
 	ID3D11DepthStencilState* GetDepthStencilState(EDepthStencilState State) const;
 	ID3D11BlendState* GetBlendState(EBlendState State) const;
 	ID3D11SamplerState* GetSamplerState(ESamplerState State) const;
@@ -64,7 +62,6 @@ public:
 	void Shutdown();
 private:
 	void CreateStates();
-	void CreateShadowRasterizerStates();
 
 private:
 	ComPtr<ID3D11Device> Device;
@@ -79,5 +76,4 @@ private:
 	ComPtr<ID3D11DepthStencilState> DepthStencilStates[(uint8)EDepthStencilState::Count];
 	ComPtr<ID3D11BlendState>        BlendStates[(uint8)EBlendState::Count];
 	ComPtr<ID3D11SamplerState>      SamplerStates[(uint8)ESamplerState::Count];
-	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mShadowRasterizerStates[ShadowDepthBiasPresetCount][ShadowSlopeScaledDepthBiasPresetCount]{};
 };

@@ -199,6 +199,59 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, GetShadowAtlasUv(ShadowUv, Parameters), ComparisonDepth);
 #endif
 }
+
+float SamplePointShadow(FShadowMapRenderParameters Parameters, float4 LightClip) {
+    if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f) || LightClip.w <= 0.0f) {
+        return 1.0f;
+    }
+    const float3 LightPosition = { LightClip.xyz / LightClip.w };
+    if (any(abs(LightPosition.xy) > 1.000001f) || LightPosition.z < 0.0f || LightPosition.z > 1.0f) {
+        return 1.0f;
+    }
+    const float2 ShadowUv = { LightPosition.xy * float2(0.5f, -0.5f) + 0.5f };
+    const float2 AtlasUv = { GetShadowAtlasUv(ShadowUv, Parameters) };
+    const int2 AtlasPixel = { (int2) (AtlasUv / Parameters.mTexelSize) };
+    return LightPosition.z <= ShadowAtlas.Load(int3(AtlasPixel, 0)) ? 1.0f : 0.0f;
+}
+
+float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal) {
+    if (mReceiveShadows == 0 || Light.mShadowIndex < 0 || NumShadowMaps < PointShadowFaceCount || (uint) Light.mShadowIndex > NumShadowMaps - PointShadowFaceCount) {
+        return 1.0f;
+    }
+    const uint FirstIndex = { (uint) Light.mShadowIndex };
+    const float NormalBias = { ShadowMaps[FirstIndex].mNormalBias };
+    const float3 BiasedPosition = { WorldPos + Normal * NormalBias };
+    const float3 ReceiverDirection = { BiasedPosition - Light.Position };
+    const float DistanceSquared = { dot(ReceiverDirection, ReceiverDirection) };
+    if (DistanceSquared <= 1.0e-12f) {
+        return 1.0f;
+    }
+    const uint FaceIndex = { GetPointShadowFaceIndex(ReceiverDirection) };
+    const FShadowMapRenderParameters Parameters = { ShadowMaps[FirstIndex + FaceIndex] };
+    const float4 LightClip = { mul(float4(BiasedPosition, 1.0f), Parameters.mLightViewProjection) };
+#if SHADOW_PCF
+    const float3 Right = { float3(Parameters.mLightViewProjection[0][0], Parameters.mLightViewProjection[1][0], Parameters.mLightViewProjection[2][0]) };
+    const float3 Up = { float3(Parameters.mLightViewProjection[0][1], Parameters.mLightViewProjection[1][1], Parameters.mLightViewProjection[2][1]) };
+    const float2 WorldTexelSize = { 2.0f * LightClip.w * Parameters.mTexelSize / Parameters.mUvScaleBias.xy };
+    const float ReceiverDistance = { sqrt(DistanceSquared) };
+    float Visibility = { 0.0f };
+    [unroll]
+    for (int Y = { -1 }; Y <= 1; ++Y) {
+        [unroll]
+        for (int X = { -1 }; X <= 1; ++X) {
+            const float3 SampleDirection = { ReceiverDirection + Right * (X * WorldTexelSize.x) - Up * (Y * WorldTexelSize.y) };
+            const uint SampleFaceIndex = { GetPointShadowFaceIndex(SampleDirection) };
+            const FShadowMapRenderParameters SampleParameters = { ShadowMaps[FirstIndex + SampleFaceIndex] };
+            const float3 SamplePosition = { Light.Position + SampleDirection * (ReceiverDistance * rsqrt(dot(SampleDirection, SampleDirection))) };
+            const float4 SampleClip = { mul(float4(SamplePosition, 1.0f), SampleParameters.mLightViewProjection) };
+            Visibility += SamplePointShadow(SampleParameters, SampleClip);
+        }
+    }
+    return Visibility / 9.0f;
+#else
+    return SamplePointShadow(Parameters, LightClip);
+#endif
+}
 #endif
 
 // 원뿔 감쇠량. 0(Outer 밖) ~ 1(Inner 안)
@@ -331,7 +384,7 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
+    const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N) : CastShadow(Light.mShadowIndex, WorldPos, N) };
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif

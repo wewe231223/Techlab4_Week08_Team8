@@ -19,7 +19,7 @@
 #include "Components/FireBallComponent.h"
 #include "Asset/AssetManager.h"
 #include "Render/Material.h"
-#include "Render/Renderer.h"
+#include "Render/ShadowRenderer.h"
 #include "Render/Texture2D.h"
 #include "Text/Font.h"
 #include "UObject/UObjectIterator.h"
@@ -612,28 +612,50 @@ namespace
 	}
 
 	bool DrawShadowDepthBiasPreset(const char* Label, int32& Preset) {
-		int32 SelectedIndex{ static_cast<int32>(NormalizeShadowDepthBiasPreset(Preset)) };
+		EShadowDepthBiasPreset Presets[ShadowDepthBiasPresetCount]{};
+		for (int32 Index{}; Index < ShadowDepthBiasPresetCount; ++Index) {
+			Presets[Index] = static_cast<EShadowDepthBiasPreset>(Index);
+		}
+		std::sort(std::begin(Presets), std::end(Presets), [](EShadowDepthBiasPreset Left, EShadowDepthBiasPreset Right) {
+			return GetShadowDepthBiasPreset(Left).mDepthBias < GetShadowDepthBiasPreset(Right).mDepthBias;
+		});
+		const EShadowDepthBiasPreset CurrentPreset{ NormalizeShadowDepthBiasPreset(Preset) };
+		int32 SelectedIndex{};
 		const char* Labels[ShadowDepthBiasPresetCount]{};
 		for (int32 Index{}; Index < ShadowDepthBiasPresetCount; ++Index) {
-			Labels[Index] = GetShadowDepthBiasPreset(static_cast<EShadowDepthBiasPreset>(Index)).mName;
+			Labels[Index] = GetShadowDepthBiasPreset(Presets[Index]).mName;
+			if (Presets[Index] == CurrentPreset) {
+				SelectedIndex = Index;
+			}
 		}
 		if (!ImGui::Combo(Label, &SelectedIndex, Labels, ShadowDepthBiasPresetCount)) {
 			return false;
 		}
-		Preset = SelectedIndex;
+		Preset = static_cast<int32>(Presets[SelectedIndex]);
 		return true;
 	}
 
 	bool DrawShadowSlopeScaledDepthBiasPreset(const char* Label, int32& Preset) {
-		int32 SelectedIndex{ static_cast<int32>(NormalizeShadowSlopeScaledDepthBiasPreset(Preset)) };
+		EShadowSlopeScaledDepthBiasPreset Presets[ShadowSlopeScaledDepthBiasPresetCount]{};
+		for (int32 Index{}; Index < ShadowSlopeScaledDepthBiasPresetCount; ++Index) {
+			Presets[Index] = static_cast<EShadowSlopeScaledDepthBiasPreset>(Index);
+		}
+		std::sort(std::begin(Presets), std::end(Presets), [](EShadowSlopeScaledDepthBiasPreset Left, EShadowSlopeScaledDepthBiasPreset Right) {
+			return GetShadowSlopeScaledDepthBiasPreset(Left).mSlopeScaledDepthBias < GetShadowSlopeScaledDepthBiasPreset(Right).mSlopeScaledDepthBias;
+		});
+		const EShadowSlopeScaledDepthBiasPreset CurrentPreset{ NormalizeShadowSlopeScaledDepthBiasPreset(Preset) };
+		int32 SelectedIndex{};
 		const char* Labels[ShadowSlopeScaledDepthBiasPresetCount]{};
 		for (int32 Index{}; Index < ShadowSlopeScaledDepthBiasPresetCount; ++Index) {
-			Labels[Index] = GetShadowSlopeScaledDepthBiasPreset(static_cast<EShadowSlopeScaledDepthBiasPreset>(Index)).mName;
+			Labels[Index] = GetShadowSlopeScaledDepthBiasPreset(Presets[Index]).mName;
+			if (Presets[Index] == CurrentPreset) {
+				SelectedIndex = Index;
+			}
 		}
 		if (!ImGui::Combo(Label, &SelectedIndex, Labels, ShadowSlopeScaledDepthBiasPresetCount)) {
 			return false;
 		}
-		Preset = SelectedIndex;
+		Preset = static_cast<int32>(Presets[SelectedIndex]);
 		return true;
 	}
 
@@ -972,8 +994,8 @@ void FDetailsPanel::OnRender()
 }
 
 
-void FDetailsPanel::SetRenderer(FRenderer* Renderer) {
-	mRenderer = Renderer;
+void FDetailsPanel::SetShadowRenderer(FShadowRenderer* ShadowRenderer) {
+	mShadowRenderer = ShadowRenderer;
 }
 
 void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
@@ -981,10 +1003,20 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		return;
 	}
 
-	FTexture2D* Atlas{ mRenderer ? mRenderer->GetShadowDepthTexture() : nullptr };
-	const FShadowMapRenderParameters* Parameters{ mRenderer ? mRenderer->GetShadowMapRenderParameters(LightComponent) : nullptr };
-	if (!Atlas || !Atlas->GetSRV() || !Parameters) {
-		ImGui::TextDisabled("Shadow map is not available for this light.");
+	FTexture2D* Atlas{ mShadowRenderer ? mShadowRenderer->GetShadowDepthTexture() : nullptr };
+	const uint32 ViewCount{ mShadowRenderer ? mShadowRenderer->GetShadowMapViewCount(LightComponent) : 0 };
+	if (!Atlas || !Atlas->GetSRV() || ViewCount == 0) {
+		ImGui::TextDisabled(LightComponent->CastsShadows() ? "Shadow map is not allocated in the last rendered view." : "Cast Shadows is disabled.");
+		return;
+	}
+	if (ViewCount == PointShadowFaceCount) {
+		const char* FaceNames[PointShadowFaceCount]{ "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, static_cast<int32>(PointShadowFaceCount) - 1);
+		ImGui::Combo("Shadow Face", &mShadowPreviewFace, FaceNames, static_cast<int32>(PointShadowFaceCount));
+	}
+	const uint32 FaceIndex{ ViewCount == PointShadowFaceCount ? static_cast<uint32>(mShadowPreviewFace) : 0 };
+	const FShadowMapRenderParameters* Parameters{ mShadowRenderer->GetShadowMapRenderParameters(LightComponent, FaceIndex) };
+	if (!Parameters) {
 		return;
 	}
 

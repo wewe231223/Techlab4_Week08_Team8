@@ -1,6 +1,5 @@
 #include "EnginePCH.h"
 #include "ShadowView.h"
-#include "Texture2D.h"
 #include "Math/Box.h"
 
 #include <algorithm>
@@ -144,15 +143,15 @@ bool BuildSpotShadowView(const FVector& LightPosition, const FVector& LightDirec
 	return true;
 }
 
-FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FTexture2D* DepthTexture, const FShadowAtlasTile& Tile) {
-	FShadowMapRenderParameters Parameters{};
-	if (!DepthTexture || !DepthTexture->GetSRV() || !DepthTexture->GetDSV() || Tile.mResolution == 0 || Tile.mResolution > DepthTexture->GetWidth() || Tile.mResolution > DepthTexture->GetHeight() || Tile.mX > DepthTexture->GetWidth() - Tile.mResolution || Tile.mY > DepthTexture->GetHeight() - Tile.mResolution) {
-		return Parameters;
+bool BuildPointShadowViews(const FVector& LightPosition, float AttenuationRadius, FShadowView (&OutViews)[PointShadowFaceCount]) {
+	const FVector Directions[PointShadowFaceCount]{ { 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } };
+	FShadowView Views[PointShadowFaceCount]{};
+	for (uint32 FaceIndex{}; FaceIndex < PointShadowFaceCount; ++FaceIndex) {
+		if (!BuildSpotShadowView(LightPosition, Directions[FaceIndex], 45.0f, AttenuationRadius, Views[FaceIndex])) {
+			return false;
+		}
+		Views[FaceIndex].mIsOmnidirectional = true;
 	}
-
-	Parameters.mLightViewProjection = View.mViewProjection;
-	Parameters.mTexelSize = FVector2{ 1.0f / static_cast<float>(DepthTexture->GetWidth()), 1.0f / static_cast<float>(DepthTexture->GetHeight()) };
-	Parameters.mUvScaleBias = FVector4{ static_cast<float>(Tile.mResolution) * Parameters.mTexelSize.X, static_cast<float>(Tile.mResolution) * Parameters.mTexelSize.Y, static_cast<float>(Tile.mX) * Parameters.mTexelSize.X, static_cast<float>(Tile.mY) * Parameters.mTexelSize.Y };
-	Parameters.mNormalBias = std::isfinite(Settings.mNormalBias) ? std::max(Settings.mNormalBias, 0.0f) : FLightShadowSettings{}.mNormalBias;
-	return Parameters;
+	std::copy(std::begin(Views), std::end(Views), std::begin(OutViews));
+	return true;
 }

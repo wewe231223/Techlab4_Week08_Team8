@@ -3,6 +3,7 @@
 
 // 그림자 데이터 또는 텍스처 리소스가 미할당된 상태. CPU의 InvalidShadowMapIndex와 같은 값이다.
 static const int InvalidShadowMapIndex = { -1 };
+static const uint PointShadowFaceCount = { 6 };
 
 // Render/ShadowMap.h의 FShadowMapRenderParameters와 동일한 112바이트 배치를 유지한다.
 struct FShadowMapRenderParameters {
@@ -15,6 +16,17 @@ struct FShadowMapRenderParameters {
     uint mArraySlice; // 선택한 텍스처 배열 내부의 층 번호. 단일 2D 텍스처에서는 0이다.
     uint2 mPadding; // CPU 구조체와 크기 및 배열 항목 간격을 일치시키는 패딩.
 };
+
+uint GetPointShadowFaceIndex(float3 Direction) {
+    const float3 AbsoluteDirection = { abs(Direction) };
+    if (AbsoluteDirection.x >= AbsoluteDirection.y && AbsoluteDirection.x >= AbsoluteDirection.z) {
+        return Direction.x >= 0.0f ? 0u : 1u;
+    }
+    if (AbsoluteDirection.y >= AbsoluteDirection.z) {
+        return Direction.y >= 0.0f ? 2u : 3u;
+    }
+    return Direction.z >= 0.0f ? 4u : 5u;
+}
 
 float2 GetShadowAtlasUv(float2 ShadowUv, FShadowMapRenderParameters Parameters) {
     float2 MinimumUv = { Parameters.mUvScaleBias.zw + Parameters.mTexelSize * 0.5f };

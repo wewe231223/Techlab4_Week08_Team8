@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "PrimitiveSceneProxy.h"
 #include "LightSceneProxy.h"
@@ -38,8 +38,6 @@ public:
 
 	void RemoveAllLights();
 	void UpdateLights(FRenderer* Renderer);
-	void GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests) const;
-	void GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
 
 	void AddFogInfo(uint32 Id, const FFogInfo& FogInfo);
 	void RemoveFogInfo(uint32 Id);
@@ -51,9 +49,6 @@ public:
 
 	void MarkDirty(FPrimitiveSceneProxy* Proxy);
 	void MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy);
-
-private:
-	bool GatherShadowCasterBounds(FBox& OutBounds) const;
 
 public:
 	TArray<FPrimitiveSceneProxy*> PrimitiveSceneProxies;

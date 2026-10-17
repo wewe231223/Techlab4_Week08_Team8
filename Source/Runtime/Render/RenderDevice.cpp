@@ -59,7 +59,6 @@ FRenderDevice::FRenderDevice()
 	DXGIAdapter->GetParent(IID_PPV_ARGS(DXGIFactory.GetAddressOf()));
 
 	CreateStates();
-	CreateShadowRasterizerStates();
 }
 
 FRenderDevice::~FRenderDevice()
@@ -98,29 +97,9 @@ ID3D11SamplerState* FRenderDevice::GetSamplerState(ESamplerState State) const {
 	return SamplerStates[static_cast<uint8>(State)].Get();
 }
 
-ID3D11RasterizerState* FRenderDevice::GetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) const {
-	const int32 DepthIndex{ static_cast<int32>(NormalizeShadowDepthBiasPreset(static_cast<int32>(DepthBiasPreset))) };
-	const int32 SlopeIndex{ static_cast<int32>(NormalizeShadowSlopeScaledDepthBiasPreset(static_cast<int32>(SlopeScaledDepthBiasPreset))) };
-	return mShadowRasterizerStates[DepthIndex][SlopeIndex].Get();
-}
 
-void FRenderDevice::CreateShadowRasterizerStates() {
-	for (int32 DepthIndex{}; DepthIndex < ShadowDepthBiasPresetCount; ++DepthIndex) {
-		const FShadowDepthBiasPreset& DepthPreset{ GetShadowDepthBiasPreset(static_cast<EShadowDepthBiasPreset>(DepthIndex)) };
-		for (int32 SlopeIndex{}; SlopeIndex < ShadowSlopeScaledDepthBiasPresetCount; ++SlopeIndex) {
-			const FShadowSlopeScaledDepthBiasPreset& SlopePreset{ GetShadowSlopeScaledDepthBiasPreset(static_cast<EShadowSlopeScaledDepthBiasPreset>(SlopeIndex)) };
-			D3D11_RASTERIZER_DESC Desc{};
-			Desc.FillMode = D3D11_FILL_SOLID;
-			Desc.CullMode = D3D11_CULL_BACK;
-			Desc.DepthClipEnable = TRUE;
-			Desc.DepthBias = DepthPreset.mDepthBias;
-			Desc.SlopeScaledDepthBias = SlopePreset.mSlopeScaledDepthBias;
-			if (FAILED(Device->CreateRasterizerState(&Desc, mShadowRasterizerStates[DepthIndex][SlopeIndex].GetAddressOf()))) {
-				HTR_LOG(Error, "Failed to create shadow rasterizer presets '{} / {}'", DepthPreset.mName, SlopePreset.mName);
-			}
-		}
-	}
-}
+
+
 
 
 TUniquePtr<FVertexBuffer> FRenderDevice::CreateStaticVertexBuffer(const void* InVertices, uint32 InSize, uint32 Stride)
@@ -460,16 +439,6 @@ void FRenderDevice::CreateStates()
 
 		Device->CreateSamplerState(&Desc, SamplerStates[(uint8)ESamplerState::LinearWrap].GetAddressOf());
 
-		Desc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
-		Desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
-		Desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
-		Desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
-		Desc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
-		Desc.BorderColor[0] = 1.0f;
-		Desc.BorderColor[1] = 1.0f;
-		Desc.BorderColor[2] = 1.0f;
-		Desc.BorderColor[3] = 1.0f;
-		Desc.MaxLOD = 0.0f;
-		Device->CreateSamplerState(&Desc, SamplerStates[static_cast<uint8>(ESamplerState::ShadowComparison)].GetAddressOf());
+
 	}
 }

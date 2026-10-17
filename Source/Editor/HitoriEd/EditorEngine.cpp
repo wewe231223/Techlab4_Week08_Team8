@@ -15,7 +15,7 @@
 #include "Engine/Level.h"
 
 #include "Render/Renderer.h"
-#include "Render/ShadowView.h"
+#include "Render/ShadowRenderer.h"
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -119,7 +119,7 @@ bool UEditorEngine::Init()
 
 	// 필요한 Panel들 추가후 raw pointer 반환(소유권 = EditorUI)
 	DetailsPanel = EditorUI->AddEditorPanel<FDetailsPanel>();
-	DetailsPanel->SetRenderer(Renderer);
+	DetailsPanel->SetShadowRenderer(&Renderer->GetShadowRenderer());
 	EditorControlsPanel = EditorUI->AddEditorPanel<FEditorControlsPanel>();
 	ViewportsPanel = EditorUI->AddEditorPanel<FViewportsPanel>();
 	ContentDrawerPanel = EditorUI->AddEditorPanel<FContentDrawerPanel>();
@@ -408,7 +408,7 @@ void UEditorEngine::RenderMultipleViewports()
 	UWorld* CapturedWorld = nullptr;
 	Renderer->SetLightDebugMode(SettingsPanel->GetSettings().LightDebugMode);
 	Renderer->SetLightCullingMode(static_cast<ELightCullingMode>(SettingsPanel->GetSettings().LightCullingMode));
-	Renderer->SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
+	Renderer->GetShadowRenderer().SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)
 	{
 		const bool bActive = MultipleViewportsAdapter.IsViewActive(ViewIndex);
@@ -949,12 +949,13 @@ void UEditorEngine::UpdateGizmoAndPicking()
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
 void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
 	FScene& Scene{ ViewWorld.GetScene() };
-	TArray<FShadowMapRequest> ShadowRequests{};
+	FShadowRenderer& ShadowRenderer{ Renderer->GetShadowRenderer() };
 	const EViewMode ViewMode{ MultipleViewportsAdapter.GetViewMode(ViewIndex) };
 	if (ViewMode == EViewMode::Lit_Lambert || ViewMode == EViewMode::Lit_BlinnPhong) {
-		Scene.GatherShadowRequests(ShadowRequests);
+		ShadowRenderer.Render(Scene);
+	} else {
+		ShadowRenderer.Reset();
 	}
-	Renderer->RenderShadowAtlas(Scene, ShadowRequests);
 	Scene.UpdateLights(Renderer);
 
 	RenderOpaquePass(ViewIndex, ViewRenderingInfo, ViewProjection, ViewCameraLocation, ViewCameraForward, RenderQueue);

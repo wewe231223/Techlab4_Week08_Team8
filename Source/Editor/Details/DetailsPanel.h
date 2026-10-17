@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 
 struct FTransform;
+class FShadowRenderer;
 
 using DetailsSelectionCallback = std::function<void(UActorComponent*)>;
 using DetailsDeleteComponentCallback = std::function<void(UActorComponent*)>;
@@ -22,7 +23,7 @@ public:
 
 	void SelectComponent(UActorComponent* Component);
 	void DrawCompoenetList(AActor* SelectedActor, UActorComponent*& OutSelectedComponent);
-	void SetRenderer(FRenderer* Renderer);
+	void SetShadowRenderer(FShadowRenderer* ShadowRenderer);
 
 	const char* GetPanelName() const override { return "Details"; }
 
@@ -46,7 +47,8 @@ private:
 	void DrawShadowMap(const ULightComponent* LightComponent);
 
 private:
-	FRenderer* mRenderer{};
+	FShadowRenderer* mShadowRenderer{};
+	int32 mShadowPreviewFace{};
 	UWorld* World = nullptr;
 	ImFont* CustomFont = nullptr;
 
@@ -64,4 +66,3 @@ private:
 	USceneComponent* PendingDroppedComponent = nullptr;
 	USceneComponent* PendingDragComponent = nullptr;
 };
-

@@ -14,14 +14,9 @@ constexpr int32 MinShadowMapResolution{ 128 };
 constexpr int32 MaxShadowMapResolution{ 2048 };
 constexpr int32 DefaultShadowMapResolution{ 512 };
 constexpr int32 DefaultDirectionalShadowMapResolution{ 2048 };
-constexpr uint32 ShadowMapTextureSlot{ 13 };
-constexpr uint32 ShadowMapBufferSlot{ 14 };
-constexpr uint32 ShadowMapSamplerSlot{ 1 };
-constexpr int32 DefaultShadowAtlasResolution{ 8192 };
-constexpr int32 MaxShadowAtlasResolution{ 8192 };
+constexpr uint32 PointShadowFaceCount{ 6 };
 
 int32 NormalizeShadowMapResolution(int32 Resolution);
-int32 NormalizeShadowAtlasResolution(int32 Resolution);
 
 enum class EShadowDepthBiasPreset : int32 {
 	None,
@@ -29,6 +24,14 @@ enum class EShadowDepthBiasPreset : int32 {
 	Medium,
 	High,
 	VeryHigh,
+	LowSixteenth,
+	LowEighth,
+	LowQuarter,
+	LowHalf,
+	LowMedium,
+	BelowMedium,
+	MediumHigh,
+	HighVeryHigh,
 	Count
 };
 
@@ -38,6 +41,14 @@ enum class EShadowSlopeScaledDepthBiasPreset : int32 {
 	Medium,
 	High,
 	VeryHigh,
+	LowSixteenth,
+	LowEighth,
+	LowQuarter,
+	LowHalf,
+	LowMedium,
+	BelowMedium,
+	MediumHigh,
+	HighVeryHigh,
 	Count
 };
 
@@ -58,12 +69,6 @@ EShadowDepthBiasPreset NormalizeShadowDepthBiasPreset(int32 Preset);
 EShadowSlopeScaledDepthBiasPreset NormalizeShadowSlopeScaledDepthBiasPreset(int32 Preset);
 const FShadowDepthBiasPreset& GetShadowDepthBiasPreset(EShadowDepthBiasPreset Preset);
 const FShadowSlopeScaledDepthBiasPreset& GetShadowSlopeScaledDepthBiasPreset(EShadowSlopeScaledDepthBiasPreset Preset);
-
-struct FShadowAtlasTile {
-	uint32 mX{};
-	uint32 mY{};
-	uint32 mResolution{};
-};
 
 // 조명 컴포넌트에서 수집하는 그림자 생성 요청 설정. 실제 맵 생성과 샘플링은 그림자 렌더 패스에서 처리한다.
 struct FLightShadowSettings {

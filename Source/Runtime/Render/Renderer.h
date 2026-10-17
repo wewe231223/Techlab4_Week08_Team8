@@ -10,8 +10,7 @@
 #include "RenderEnums.h"
 #include "Material.h"
 #include "ShadowMap.h"
-#include "ShadowMapResource.h"
-#include "Containers/Map.h"
+#include "ShadowRenderer.h"
 
 constexpr uint32 ObjectSlotBytes = 256;
 
@@ -184,20 +183,14 @@ struct alignas(16) FLightGridConstants
 static_assert(sizeof(FLightGridConstants) == 48, "UberLit의 cbuffer LightGrid와 같아야 한다");
 
 struct FLightRenderParameters;
-struct FShadowView;
-struct FShadowMapRequest;
 class FScene;
 class ULightComponent;
 
-class FRenderer
-{
+class FRenderer {
 public:
 	bool Init();
-	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = DefaultShadowAtlasResolution);
-	FTexture2D* GetShadowDepthTexture() const;
-	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
-	const FShadowMapRenderParameters* GetShadowMapRenderParameters(const ULightComponent* LightComponent) const;
-	int32 GetShadowMapIndex(const ULightComponent* LightComponent) const;
+	FShadowRenderer& GetShadowRenderer();
+	const FShadowRenderer& GetShadowRenderer() const;
 
 	// 기존 단일 카메라의 ViewProjection으로 렌더 큐 전체를 그린다.
 	void RenderAll(FRenderQueue& InQueue, UCameraComponent* CameraComponent);
@@ -240,7 +233,6 @@ public:
 
 	// 이후 그리는 UberLit 머티리얼이 쓸 조명 모델. View마다 RenderOpaque 전에 설정한다.
 	void SetViewMode(EViewMode InViewMode);
-	void SetShadowPcfEnabled(bool Enabled);
 	EViewMode GetViewMode() const { return CurrentViewMode; }
 
 	// DepthTexture는 Tiled25D에서만 쓴다. 이때는 DSV에서 풀린 상태(RenderDepth 뒤 EndRenderPass)여야 한다.
@@ -251,9 +243,6 @@ public:
 	void SetLightCullingMode(ELightCullingMode Mode) { LightCullingMode = Mode; }
 	ELightCullingMode GetLightCullingMode() const { return LightCullingMode; }
 private:
-	bool InitializeShadowPass();
-	void BindShadowMaps();
-	void DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile);
 	void DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProjection);
 	void DrawStaticGroups();
 	void UpdatePerObjectConstants(const FMatrix& World, bool ReceiveShadows = true);
@@ -264,15 +253,7 @@ private:
 	void UploadPerObjectConstants();
 
 private:
-	FShadowMapResource mShadowMapResource{};
-	FRenderQueue mShadowRenderQueue{};
-	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
-	TMap<const ULightComponent*, int32> mShadowMapIndices{};
-	TUniquePtr<FStructuredBuffer> mShadowMapBuffer{};
-	FShaderProgram* mShadowShader{};
-	TUniquePtr<FConstantBuffer> mShadowViewCB{};
-	TUniquePtr<FConstantBuffer> mShadowObjectCB{};
-	bool mShadowMapReady{};
+	FShadowRenderer mShadowRenderer{};
 
 	// private
 	TUniquePtr<FConstantBuffer> GridLightingCB{};
@@ -323,5 +304,4 @@ private:
 	uint32 NumLocalLightsThisFrame = 0;
 
 	EViewMode CurrentViewMode = EViewMode::Lit_Lambert;
-	bool mShadowPcfEnabled{};
 };

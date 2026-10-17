@@ -302,15 +302,7 @@ void RenderCommand::SetRasterizerState(ERasterizerState State)
 	RenderDevice->GetContext()->RSSetState(RenderDevice->GetRasterizerState(State));
 }
 
-bool RenderCommand::SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) {
-	ID3D11RasterizerState* State{ RenderDevice->GetShadowRasterizerState(DepthBiasPreset, SlopeScaledDepthBiasPreset) };
-	if (!State) {
-		return false;
-	}
 
-	RenderDevice->GetContext()->RSSetState(State);
-	return true;
-}
 
 void RenderCommand::SetBlendState(EBlendState State)
 {
@@ -383,5 +375,3 @@ void RenderCommand::BindShaderResource(uint32 Slot, ID3D11ShaderResourceView* SR
 		RenderDevice->GetContext()->CSSetShaderResources(Slot, 1, &SRV);
 	}
 }
-
-

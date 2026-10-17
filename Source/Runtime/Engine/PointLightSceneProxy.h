@@ -2,9 +2,13 @@
 
 #include "LocalLightSceneProxy.h"
 
-class FPointLightSceneProxy : public FLocalLightSceneProxy
-{
+struct FShadowView;
+
+class FPointLightSceneProxy : public FLocalLightSceneProxy {
 public:
-    using FLocalLightSceneProxy::FLocalLightSceneProxy;
-    void GetLightShaderParameters(FLightRenderParameters& Out) const override;
+	using FLocalLightSceneProxy::FLocalLightSceneProxy;
+
+public:
+	void GetLightShaderParameters(FLightRenderParameters& Out) const override;
+	bool BuildShadowViews(FShadowView (&OutViews)[PointShadowFaceCount]) const;
 };

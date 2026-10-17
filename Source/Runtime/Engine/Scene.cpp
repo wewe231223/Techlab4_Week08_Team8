@@ -6,29 +6,8 @@
 #include "Components/SkyLightComponent.h"
 #include "Components/RectLightComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Asset/LOD/StaticMeshLODSelector.h"
-#include "Engine/SpotLightSceneProxy.h"
-#include "Render/ShadowView.h"
 
 #include <algorithm>
-
-namespace {
-	bool IsShadowCaster(const FPrimitiveSceneProxy* Proxy) {
-		if (!Proxy || !Proxy->IsVisible() || !Proxy->CastsShadows() || !Proxy->GetMesh() || !Proxy->GetRenderState()) {
-			return false;
-		}
-		const UStaticMeshComponent* Component{ Cast<UStaticMeshComponent>(Proxy->GetComponent()) };
-		if (Component && Component->IsEditorIcon()) {
-			return false;
-		}
-		for (const FCachedMeshSection& Section : Proxy->GetRenderState()->Sections) {
-			if (Section.Material && Section.Material->BlendState == EBlendState::Opaque && Section.IndexCount != 0) {
-				return true;
-			}
-		}
-		return false;
-	}
-}
 
 void FScene::AddPrimitive(UPrimitiveComponent* Component)
 {
@@ -198,14 +177,14 @@ void FScene::UpdateLights(FRenderer* Renderer)
 		}
 		FLightRenderParameters Parameters{};
 		Proxy->GetLightShaderParameters(Parameters);
-		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowMapIndex(Proxy->GetLightComponent()) });
+		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowRenderer().GetShadowMapIndex(Proxy->GetLightComponent()) });
 	}
 
 	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
 	{
 		FLightRenderParameters& P = LocalLightParameters[Proxy->PackedIndex];
 		Proxy->GetLightShaderParameters(P);
-		P.mShadowIndex = Renderer->GetShadowMapIndex(Proxy->GetLightComponent());
+		P.mShadowIndex = Renderer->GetShadowRenderer().GetShadowMapIndex(Proxy->GetLightComponent());
 		if (!Proxy->IsVisible())
 			P.Radius = 0.0f;                              // 칸은 유지하고 영향만 없앤다
 			/*FTransform Transform;
@@ -396,91 +375,4 @@ void FScene::MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy)
 	if (!Proxy || Proxy->bRenderStateQueued) return;
 	Proxy->bRenderStateQueued = true;
 	RenderStateDirtyProxies.Add(Proxy);
-}
-
-void FScene::GatherShadowRequests(TArray<FShadowMapRequest>& OutRequests) const {
-	OutRequests.Reset();
-	OutRequests.Reserve(DirectionalLightProxies.Num() + LocalLightProxies.Num());
-	FBox CasterBounds{};
-	if (!DirectionalLightProxies.IsEmpty() && GatherShadowCasterBounds(CasterBounds)) {
-		for (const FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies) {
-			FShadowView View{};
-			if (Proxy && Proxy->BuildShadowView(CasterBounds, View)) {
-				OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings(), Proxy->GetLightComponent() });
-			}
-		}
-	}
-
-	for (const FLocalLightSceneProxy* Proxy : LocalLightProxies) {
-		if (!Proxy || Proxy->GetLightComponent()->GetLightType() != ELightType::Spot) {
-			continue;
-		}
-		const FSpotLightSceneProxy* SpotProxy{ static_cast<const FSpotLightSceneProxy*>(Proxy) };
-		FShadowView View{};
-		if (SpotProxy->BuildShadowView(View)) {
-			OutRequests.Add(FShadowMapRequest{ View, Proxy->GetShadowSettings(), Proxy->GetLightComponent() });
-		}
-	}
-}
-
-bool FScene::GatherShadowCasterBounds(FBox& OutBounds) const {
-	bool HasBounds{};
-	BVH.Query([](const FBox&) {
-		return true;
-	}, [&OutBounds, &HasBounds](const FPrimitiveSceneProxy* Proxy) {
-		if (!IsShadowCaster(Proxy)) {
-			return;
-		}
-		const FAABB& Bounds{ Proxy->GetBounds() };
-		const FBox CasterBounds{ Bounds.Center - Bounds.Extent, Bounds.Center + Bounds.Extent };
-		if (HasBounds) {
-			OutBounds.Expand(CasterBounds);
-		} else {
-			OutBounds = CasterBounds;
-			HasBounds = true;
-		}
-	});
-	return HasBounds;
-}
-
-void FScene::GatherShadowCasters(FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution) {
-	OutQueue.Reset();
-	const FFrustumPlanes Frustum{ ExtractFrustumPlanes(View.mViewProjection) };
-	const float ProjectionScale{ std::max(std::abs(View.mProjection.M[1][0]), std::abs(View.mProjection.M[2][1])) };
-	const uint32 Size{ static_cast<uint32>(std::clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution)) };
-	FLODViewContext LODView{};
-	LODView.Width = Size;
-	LODView.Height = Size;
-	LODView.CameraPosition = View.mWorldPosition;
-	LODView.CameraForward = FVector{ View.mView.M[0][0], View.mView.M[1][0], View.mView.M[2][0] };
-	LODView.ProjectionScaleSquared = ProjectionScale * ProjectionScale;
-	LODView.NearZ = View.mNearPlane;
-	LODView.bOrthographic = View.mIsOrthographic;
-	LODView.ViewProjection = View.mViewProjection;
-	LODView.Prepare();
-
-	BVH.QueryCull(FrustumAllPlanesMask, [&Frustum](const FBox& Bounds, uint32& Mask) {
-		return static_cast<EBVHCullResult>(ClassifyBoxInFrustum(Bounds, Frustum, Mask));
-	}, [&OutQueue, &LODView](FPrimitiveSceneProxy* Proxy) {
-		if (!IsShadowCaster(Proxy)) {
-			return;
-		}
-
-		const uint32 LODIndex{ SelectLOD(*Proxy, LODView) };
-		const FCachedMeshLOD& LOD{ Proxy->GetLOD(LODIndex) };
-		for (uint32 SectionIndex{}; SectionIndex < LOD.NumSections; ++SectionIndex) {
-			const FCachedMeshSection& Section{ Proxy->GetSection(LOD.FirstSection + SectionIndex) };
-			if (!Section.Material || Section.Material->BlendState != EBlendState::Opaque || Section.IndexCount == 0) {
-				continue;
-			}
-
-			FRenderPacket& Packet{ OutQueue.AddDefaulted_GetRef() };
-			Packet.Proxy = Proxy;
-			Packet.Mesh = Proxy->GetMesh();
-			Packet.Material = Section.Material;
-			Packet.StartIndex = Section.StartIndex;
-			Packet.IndexCount = Section.IndexCount;
-			Packet.LODIndex = static_cast<uint8>(LODIndex);
-		}
-	});
 }
