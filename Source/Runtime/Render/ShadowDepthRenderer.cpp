@@ -35,18 +35,22 @@ bool FShadowDepthRenderer::Init()
 	return true;
 }
 
-void FShadowDepthRenderer::OnRender(FTexture2D* ShadowMap, const FMatrix& LightViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters)
+void FShadowDepthRenderer::OnRender(FTexture2D* Atlas, const FShadowAtlasTile& Tile, const FMatrix& LightViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters)
 {
-	if (!ShadowMap) return;
+	if (!Atlas || !Tile.IsValid()) return;
 
-	// RTV 없이 섀도우맵 DSV만 묶고 1.0으로 지운다. 뷰포트는 섀도우맵 해상도에 맞춘다.
-	// 메인 패스가 이 섀도우맵을 SRV로 꽂게 되면, 여기서 DSV로 묶기 전에 그 슬롯을 UnbindShaderResource로 풀어야 한다.
+	// 지난 프레임 메인 패스가 아틀라스를 SRV로 꽂아 두었으므로, DSV로 묶기 전에 풀어야 한다(동시에 묶으면 런타임이 무시한다).
+	RenderCommand::UnbindShaderResource(ShadowAtlasSRVSlot, EShaderBindFlagBits::Pixel);
+
+	// RTV 없이 아틀라스 DSV만 묶는다. 뷰포트를 타일로 잡으면 라이트 행렬이 만든 NDC -1~1이 타일 영역에만 그려져
+	// 옆 타일을 침범하지 않는다. 지우면 다른 라이트 타일까지 지워지므로 Load로 둔다.
 	FRenderingInfo RenderingInfo;
-	RenderingInfo.ViewportSetting.Width = ShadowMap->GetWidth();
-	RenderingInfo.ViewportSetting.Height = ShadowMap->GetHeight();
-	RenderingInfo.DepthStencil.Texture = ShadowMap;
-	RenderingInfo.DepthStencil.LoadOp = ERenderTargetLoadOp::Clear;
-	RenderingInfo.DepthStencil.ClearValue.DepthClearValue = 1.0f;
+	RenderingInfo.ViewportSetting.StartX = static_cast<int32>(Tile.X);
+	RenderingInfo.ViewportSetting.StartY = static_cast<int32>(Tile.Y);
+	RenderingInfo.ViewportSetting.Width = Tile.Size;
+	RenderingInfo.ViewportSetting.Height = Tile.Size;
+	RenderingInfo.DepthStencil.Texture = Atlas;
+	RenderingInfo.DepthStencil.LoadOp = ERenderTargetLoadOp::Load;
 	RenderCommand::BeginRenderPass(RenderingInfo);
 
 	RenderCommand::BindPipelineState(PipelineState);

@@ -173,9 +173,9 @@ void FRenderer::RenderAll(FRenderQueue& InQueue, const FMatrix& ViewProjection, 
 void FRenderer::RenderOpaque(const FMatrix& ViewProjection)
 {
 	//Shadow
-	if (DIrectionalShadowMap)
+	if (ShadowMapAtlas)
 	{
-		RenderCommand::BindShaderResource(20, DIrectionalShadowMap, EShaderBindFlagBits::Pixel);
+		RenderCommand::BindShaderResource(ShadowAtlasSRVSlot, ShadowMapAtlas, EShaderBindFlagBits::Pixel);
 	}
 	RenderCommand::BindConstantBuffer(6, ShadowCB.get(), EShaderBindFlagBits::Pixel);
 	RenderCommand::BindSamplerState(1, ESamplerState::ShadowCompare, EShaderBindFlagBits::Pixel);
@@ -303,21 +303,25 @@ void FRenderer::RenderDepth(const FMatrix& ViewProjection)
 	LastMaterial = nullptr;
 }
 
-void FRenderer::RenderShadowDepth(FTexture2D* ShadowMap, const FMatrix& ViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters)
+void FRenderer::RenderShadowDepth(FTexture2D* Atlas, const FShadowAtlasTile& Tile, const FMatrix& ViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters)
 {
 	if (!ShadowDepthRenderer) return;
 
-	ShadowDepthRenderer->OnRender(ShadowMap, ViewProjection, ShadowCasters);
+	ShadowDepthRenderer->OnRender(Atlas, Tile, ViewProjection, ShadowCasters);
 
 	// 섀도우 패스가 셰이더·메시를 직접 바인딩했으므로 본 패스가 처음부터 다시 바인딩하게 한다.
 	LastMesh = nullptr;
 	LastMaterial = nullptr;
 }
 
-void FRenderer::TEMP_SetDirectionalShadow(FTexture2D* ShadowMap, const FMatrix& LightViewProjection)
+void FRenderer::SetShadowAtlas(FTexture2D* ShadowMap)
 {
-	DIrectionalShadowMap = ShadowMap;
-	FShadowConstants Constants = { LightViewProjection };
+	ShadowMapAtlas = ShadowMap;
+}
+
+void FRenderer::TEMP_SetDirectionalShadow(const FMatrix& LightViewProjection, const FVector4& AtlasScaleOffset)
+{
+	FShadowConstants Constants = { LightViewProjection, AtlasScaleOffset };
 	RenderCommand::UpdateBufferData(ShadowCB.get(), &Constants, sizeof(FShadowConstants));
 }
 

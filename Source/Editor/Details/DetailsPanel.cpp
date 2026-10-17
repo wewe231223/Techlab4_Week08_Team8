@@ -13,6 +13,7 @@
 #include "Components/RectLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Engine/LightSceneProxy.h"
+#include "Engine/World.h"
 
 #include "Components/RotatingMovementComponent.h"
 #include "Components/ProjectileMovementComponent.h"
@@ -413,19 +414,21 @@ namespace
 		ImGui::PopID();
 	}
 
-	// 라이트 프록시가 가진 섀도우맵을 그대로 보여준다 (디버그용).
+	// 라이트가 할당받은 아틀라스 타일을 잘라서 보여준다 (디버그용).
 	// R24 깊이 SRV라 빨간 채널에만 값이 들어가고, 가까울수록 어둡고 아무것도 없으면(1.0) 빨갛게 보인다.
 	void DrawShadowMaps(const ULightComponent* LightComponent)
 	{
 		const FLightSceneProxy* Proxy = LightComponent->SceneProxy;
-		const int32 NumShadowMaps = Proxy ? Proxy->GetNumAllocatedShadowMaps() : 0;
+		UWorld* World = LightComponent->GetWorld();
+		FTexture2D* Atlas = World ? World->GetScene().GetShadowAtlasTexture() : nullptr;
+		const int32 NumShadowMaps = (Proxy && Atlas && Atlas->GetSRV()) ? Proxy->GetNumShadowTiles() : 0;
 
 		if (!ImGui::CollapsingHeader("Shadow Map", ImGuiTreeNodeFlags_DefaultOpen))
 			return;
 
 		if (NumShadowMaps <= 0)
 		{
-			ImGui::TextDisabled("No shadow map (Cast Shadows off, unsupported light, or not rendered yet)");
+			ImGui::TextDisabled("No shadow tile (Cast Shadows off, unsupported light, or atlas full)");
 			return;
 		}
 
@@ -438,15 +441,18 @@ namespace
 
 		for (int32 Index = 0; Index < NumShadowMaps; ++Index)
 		{
-			FTexture2D* ShadowMap = Proxy->GetShadowMap(Index);
-			if (!ShadowMap || !ShadowMap->GetSRV()) continue;
+			// 아틀라스에서 이 타일 영역만 UV로 잘라 그린다.
+			const FShadowAtlasTile& Tile = Proxy->GetTile(Index);
+			const FVector4 ScaleOffset = Tile.GetAtlasScaleOffset();
+			const ImVec2 UV0{ ScaleOffset.Z, ScaleOffset.W };
+			const ImVec2 UV1{ ScaleOffset.Z + ScaleOffset.X, ScaleOffset.W + ScaleOffset.Y };
 
 			ImGui::BeginGroup();
 			if (NumShadowMaps == 6)
 				ImGui::TextUnformatted(CubeFaceNames[Index]);
-			ImGui::Image((ImTextureID)ShadowMap->GetSRV(), { Size, Size });
+			ImGui::Image((ImTextureID)Atlas->GetSRV(), { Size, Size }, UV0, UV1);
 			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("%u x %u", ShadowMap->GetWidth(), ShadowMap->GetHeight());
+				ImGui::SetTooltip("%u x %u at (%u, %u) in %u atlas", Tile.Size, Tile.Size, Tile.X, Tile.Y, AtlasSize);
 			ImGui::EndGroup();
 
 			// 다음 칸이 들어갈 자리가 있으면 같은 줄에 붙이고, 없으면 줄을 바꾼다.

@@ -2,6 +2,7 @@
 
 #include "Components/LightComponent.h"
 #include "Render/Texture2D.h"
+#include "Render/ShadowAtlas.h"
 
 #include "SceneManagement.h"
 
@@ -28,11 +29,14 @@ public:
 	const ULightComponent* GetLightComponent() const { return LightComponent; }
 	bool IsVisible() const { return LightComponent->IsVisible(); }
 
-	// 이 라이트가 쓰는 섀도우맵 장수
+	// 이 라이트가 "필요로 하는" 섀도우맵(타일) 장수. Point 6, Spot·Directional 1, 지원하지 않으면 0.
 	// 인덱스는 ULightComponent::GetShadowViewPorjection(index)와 짝이다.
 	virtual int32 GetNumShadowMaps() const { return 0; }
-	int32 GetNumAllocatedShadowMaps() const { return ShadowMaps.Num(); }
-	FTexture2D* GetShadowMap(int32 Index) const { return ShadowMaps[Index].get(); }
+
+	// 아틀라스에서 "실제로 할당받은" 타일 수. 아틀라스가 꽉 차면 GetNumShadowMaps()보다 적을 수 있다(그때는 그림자를 끈다).
+	int32 GetNumShadowTiles() const { return ShadowTiles.Num(); }
+	bool HasAllShadowTiles() const { return GetNumShadowMaps() > 0 && ShadowTiles.Num() == GetNumShadowMaps(); }
+	const FShadowAtlasTile& GetTile(const int32 Index) const { return ShadowTiles[Index]; }
 
 protected:
 	const ULightComponent* LightComponent = nullptr;
@@ -42,7 +46,7 @@ private:
 	FScene* Scene = nullptr;
     int32 PackedIndex = INDEX_NONE;
 
-	TArray<TUniquePtr<FTexture2D>> ShadowMaps;
+	TArray<FShadowAtlasTile> ShadowTiles;
 };
 
 

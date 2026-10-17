@@ -58,6 +58,9 @@ bool UWorld::Init()
 	//카메라 생성
 	CreateMainCamera();
 
+	//FScene::Init
+	Scene.Init();
+
 	return true;
 }
 

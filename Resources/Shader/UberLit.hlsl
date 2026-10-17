@@ -115,9 +115,11 @@ cbuffer LightGrid : register(b5)
     uint2 LightGridPadding;
 };
 
+// Renderer.h의 FShadowConstants와 바이트 단위로 같아야 한다.
 cbuffer ShadowConstants : register(b6)
 {
     matrix DirectionalViewProjection;
+    float4 DirectionalAtlasScaleOffset;   // AtlasUV = ShadowUV * xy + zw
 }
 
 StructuredBuffer<FLightRenderParameters> LocalLights : register(t10);
@@ -127,8 +129,7 @@ StructuredBuffer<uint> CellLightIndices : register(t12);
 Texture2D DiffuseTexture : register(t0);
 Texture2D NormalTexture : register(t1);
 
-//TODO : t2에 Directional ShadowMap 바인딩 예정
-Texture2D DirectionalShadowMapTexture : register(t20);
+Texture2D ShadowMapAtlas : register(t20);
 SamplerComparisonState ShadowMapSampler : register(s1);
 SamplerState MaterialSampler : register(s0);
 
@@ -222,12 +223,25 @@ float CalcDirectionalShadow(float3 WorldPos, uint InReceiveShadow)
     //UV : 0 ~ +1, y가 아래쪽
     const float2 ShadowUV = float2(NDC.x * 0.5f + 0.5f, -NDC.y * 0.5f + 0.5f);
     
-     // 섀도우맵 범위 밖은 그림자 없음 (Far 너머 포함)
+    // 섀도우맵 범위 밖은 그림자 없음 (Far 너머 포함).
+    // 아틀라스로 옮긴 뒤에는 0~1이 아틀라스 전체 기준이라 타일 밖을 못 거르므로, 옮기기 전에 검사한다.
     if (any(ShadowUV < 0.f) || any(ShadowUV > 1.0f) || NDC.z > 1.0f)
         return 1.0f;
-    
+
+    // 타일 영역으로 옮긴다. 깊이(NDC.z)는 뷰포트 위치와 무관하게 0~1 그대로 기록되므로 바꾸지 않는다.
+    const float2 TileMin = DirectionalAtlasScaleOffset.zw;
+    const float2 TileMax = TileMin + DirectionalAtlasScaleOffset.xy;
+    float2 AtlasUV = ShadowUV * DirectionalAtlasScaleOffset.xy + TileMin;
+
+    // 2x2 PCF가 옆 타일(다른 라이트)의 깊이를 섞지 않도록 타일 안쪽 반 텍셀로 가둔다.
+    // 한 장짜리 섀도우맵일 때는 BORDER 샘플러가 하던 일이다.
+    uint AtlasWidth, AtlasHeight;
+    ShadowMapAtlas.GetDimensions(AtlasWidth, AtlasHeight);
+    const float2 HalfTexel = 0.5f / float2(AtlasWidth, AtlasHeight);
+    AtlasUV = clamp(AtlasUV, TileMin + HalfTexel, TileMax - HalfTexel);
+
     // 비교 샘플러(LESS_EQUAL): 내 깊이 <= 기록된 깊이면 1(빛 받음), 아니면 0. 하드웨어가 2x2 PCF로 섞어 준다
-    return DirectionalShadowMapTexture.SampleCmpLevelZero(ShadowMapSampler, ShadowUV, NDC.z);
+    return ShadowMapAtlas.SampleCmpLevelZero(ShadowMapSampler, AtlasUV, NDC.z);
 }
 
 // Directional Light의 영향을 구한다

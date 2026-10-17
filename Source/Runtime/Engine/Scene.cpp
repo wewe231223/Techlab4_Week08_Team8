@@ -7,6 +7,11 @@
 #include "Components/RectLightComponent.h"
 #include "Render/RenderCommand.h"
 
+void FScene::Init()
+{
+	ShadowAtlas.Init();
+}
+
 void FScene::AddPrimitive(UPrimitiveComponent* Component)
 {
 	if (!Component || Component->SceneProxy) return;
@@ -120,6 +125,8 @@ void FScene::RemoveLight(ULightComponent* Component)
 		return;
 	}
 
+	FreeShadowTiles(Proxy);   // 돌려주지 않으면 라이트를 지울 때마다 아틀라스 공간이 샌다
+
 	const int32 Index = Proxy->PackedIndex;
 	if (Component->GetLightType() == ELightType::Directional)
 	{
@@ -141,8 +148,8 @@ void FScene::RemoveLight(ULightComponent* Component)
 
 void FScene::RemoveAllLights()
 {
-	for (FLightSceneProxy* Proxy : DirectionalLightProxies) delete Proxy;
-	for (FLightSceneProxy* Proxy : LocalLightProxies)       delete Proxy;
+	for (FLightSceneProxy* Proxy : DirectionalLightProxies) { FreeShadowTiles(Proxy); delete Proxy; }
+	for (FLightSceneProxy* Proxy : LocalLightProxies)       { FreeShadowTiles(Proxy); delete Proxy; }
 	DirectionalLightProxies.Reset();
 	LocalLightProxies.Reset();
 	LocalLightParameters.Reset();
@@ -153,6 +160,9 @@ void FScene::RemoveAllLights()
 void FScene::UpdateLights(FRenderer* Renderer)
 {
 	if (!Renderer) return;
+
+	// 아래 bHasShadow·ShadowIndex와 RenderShadowDepth가 같은 할당 결과를 보도록 먼저 타일을 맞춘다.
+	UpdateShadowTiles();
 
 	FLightingConstants Constants{};
 	Constants.Ambient.Color = FVector(1, 1, 1);
@@ -193,51 +203,46 @@ void FScene::UpdateLights(FRenderer* Renderer)
 	Renderer->SetLighting(Constants, LocalLightParameters);
 }
 
-namespace
-{
-
-	// DSV로 깊이를 쓰고 메인 패스에서 SRV로 읽어야 해서 TYPELESS로 만든다.
-	// FTexture2D::CreateViews가 TYPELESS 깊이로 처리하는 포맷이 R24G8뿐이라 그에 맞춘다.
-	TUniquePtr<FTexture2D> CreateShadowMap(uint32 Resolution)
-	{
-		D3D11_TEXTURE2D_DESC Desc{};
-		Desc.Width = Resolution;
-		Desc.Height = Resolution;
-		Desc.MipLevels = 1;
-		Desc.ArraySize = 1;
-		Desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-		Desc.SampleDesc.Count = 1;
-		Desc.Usage = D3D11_USAGE_DEFAULT;
-		Desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
-		return RenderCommand::CreateTexture2D(Desc);
-	}
-}
-
 void FScene::RenderShadowDepth(FRenderer* Renderer)
 {
 	if (!Renderer) return;
+
+	FTexture2D* Atlas = ShadowAtlas.GetTexture();
+	if (!Atlas) return;
+	Renderer->SetShadowAtlas(Atlas);
+
+	// 타일마다 지우면 앞서 그린 다른 라이트 타일까지 지워지므로, 그릴 타일이 있을 때 프레임에 한 번만 전체를 지운다.
+	// 지난 프레임 메인 패스가 SRV로 꽂아 둔 슬롯은 DSV로 쓰기 전에 푼다.
+	bool bAtlasCleared = false;
+	auto RenderLight = [&](FLightSceneProxy* Proxy, bool bDirectional)
+	{
+		if (!ShouldRenderShadow(Proxy)) return;
+		if (!bAtlasCleared)
+		{
+			RenderCommand::UnbindShaderResource(ShadowAtlasSRVSlot, EShaderBindFlagBits::Pixel);
+			ShadowAtlas.ClearDepth();
+			bAtlasCleared = true;
+		}
+		RenderLightShadowDepth(Renderer, Proxy, Atlas, bDirectional);
+	};
 
 	// 셰이더가 Directional을 하나만 받으므로 UpdateLights와 같은 규칙으로 첫 번째 보이는 것만 그린다.
 	for (FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies)
 	{
 		if (!Proxy->IsVisible()) continue;
-		if (ShouldRenderShadow(Proxy))
-			RenderLightShadowDepth(Renderer, Proxy);
+		RenderLight(Proxy, true);
 		break;
 	}
 
 	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
-	{
-		if (ShouldRenderShadow(Proxy))
-			RenderLightShadowDepth(Renderer, Proxy);
-	}
+		RenderLight(Proxy, false);
 }
 
-bool FScene::ShouldRenderShadow(const FLightSceneProxy* Proxy) const
+bool FScene::CanCastShadow(const FLightSceneProxy* Proxy) const
 {
 	if (!Proxy->IsVisible()) return false;
 	if (!Proxy->GetLightComponent()->IsCastShadows()) return false;
-	if (Proxy->GetNumShadowMaps() <= 0) return false;   // Rect 등 아직 그림자를 지원하지 않는 라이트
+	if (Proxy->GetNumShadowMaps() <= 0) return false;   // 그림자를 지원하지 않는 라이트
 
 	// 씬에 물체가 없으면 caster도 receiver도 없다. 바운딩 구 반지름이 0이면 투영 행렬도 만들 수 없다.
 	if (BVH.IsEmpty()) return false;
@@ -245,39 +250,89 @@ bool FScene::ShouldRenderShadow(const FLightSceneProxy* Proxy) const
 	return (Bounds.Max - Bounds.Min).Length() > KINDA_SMALL_NUMBER;
 }
 
-void FScene::RenderLightShadowDepth(FRenderer* Renderer, FLightSceneProxy* Proxy)
+bool FScene::ShouldRenderShadow(const FLightSceneProxy* Proxy) const
 {
-	// 건너뛸지는 ShouldRenderShadow에서 이미 정했다. 여기서는 그리기만 한다.
+	// 아틀라스가 꽉 차 타일을 다 못 받은 라이트는 그림자를 끈다 (빈 타일을 샘플링하지 않게).
+	return CanCastShadow(Proxy) && Proxy->HasAllShadowTiles();
+}
+
+void FScene::FreeShadowTiles(FLightSceneProxy* Proxy)
+{
+	for (FShadowAtlasTile& Tile : Proxy->ShadowTiles)
+		ShadowAtlas.DeAllocate(Tile);
+	Proxy->ShadowTiles.Reset();
+}
+
+void FScene::UpdateShadowTiles()
+{
+	// 할당은 유지하고(나중에 캐싱할 수 있도록), 그림자를 그리지 않게 됐거나 해상도가 바뀐 라이트만 타일을 돌려받아 다시 준다.
+	TArray<FLightSceneProxy*> Pending;
+	auto Visit = [&](FLightSceneProxy* Proxy, bool bCandidate)
+	{
+		// 아틀라스보다 큰 해상도는 아틀라스 크기로 줄인다.
+		const uint32 Resolution = std::min(Proxy->GetLightComponent()->GetShadowResolution(), AtlasSize);
+		if (bCandidate && Proxy->HasAllShadowTiles() && Proxy->ShadowTiles[0].Size == Resolution)
+			return;   // 그대로 쓴다
+
+		FreeShadowTiles(Proxy);
+		if (bCandidate)
+			Pending.Add(Proxy);
+	};
+
+	// Directional은 셰이더가 하나만 받으므로 첫 번째 보이는 것만 후보다. 나머지는 타일을 돌려준다.
+	bool bFoundDirectional = false;
+	for (FDirectionalLightSceneProxy* Proxy : DirectionalLightProxies)
+	{
+		const bool bFirstVisible = !bFoundDirectional && Proxy->IsVisible();
+		bFoundDirectional |= bFirstVisible;
+		Visit(Proxy, bFirstVisible && CanCastShadow(Proxy));
+	}
+	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
+		Visit(Proxy, CanCastShadow(Proxy));
+
+	// 큰 해상도부터 넣어야 쿼드트리에 빈틈이 덜 생긴다. 모든 면을 못 받으면 받은 것도 돌려준다(부분 그림자 없음).
+	std::sort(Pending.begin(), Pending.end(), [](const FLightSceneProxy* A, const FLightSceneProxy* B)
+		{ return A->GetLightComponent()->GetShadowResolution() > B->GetLightComponent()->GetShadowResolution(); });
+
+	for (FLightSceneProxy* Proxy : Pending)
+	{
+		const uint32 Resolution = std::min(Proxy->GetLightComponent()->GetShadowResolution(), AtlasSize);
+		for (int32 Index = 0; Index < Proxy->GetNumShadowMaps(); ++Index)
+		{
+			FShadowAtlasTile Tile;
+			if (!ShadowAtlas.Allocate(Resolution, Tile))
+			{
+				FreeShadowTiles(Proxy);
+				break;
+			}
+			Proxy->ShadowTiles.Add(Tile);
+		}
+	}
+}
+
+void FScene::RenderLightShadowDepth(FRenderer* Renderer, FLightSceneProxy* Proxy, FTexture2D* Atlas, bool bDirectional)
+{
+	// 건너뛸지·타일 할당은 이미 끝났다(ShouldRenderShadow, UpdateShadowTiles). 여기서는 그리기만 한다.
 	const ULightComponent* LightComponent = Proxy->GetLightComponent();
-	const int32 NumShadowMaps = Proxy->GetNumShadowMaps();
 
 	const FBox& Bounds = BVH.GetRootBounds();
 	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
 	const float   Radius = (Bounds.Max - Bounds.Min).Length() * 0.5f;
 
-	// 처음 필요할 때 만들고 이후 재사용한다. 해상도가 바뀌면 통째로 다시 만든다.
-	const uint32 Resolution = LightComponent->GetShadowResolution();
-	if (Proxy->ShadowMaps.Num() != NumShadowMaps || (NumShadowMaps > 0 && Proxy->ShadowMaps[0]->GetWidth() != Resolution));
-	{
-		Proxy->ShadowMaps.Reset();
-		for (int32 Index = 0; Index < NumShadowMaps; ++Index)
-			Proxy->ShadowMaps.Add(CreateShadowMap(Resolution));
-	}
-
-
 	// Point는 면마다 절두체가 달라 caster도 면마다 다시 고른다.
-	for (int32 Index = 0; Index < NumShadowMaps; ++Index)
+	for (int32 Index = 0; Index < Proxy->GetNumShadowTiles(); ++Index)
 	{
-		FTexture2D* ShadowMap = Proxy->ShadowMaps[Index].get();
-		if (!ShadowMap) continue;
-
 		const FMatrix LightViewProjection = LightComponent->GetShadowViewPorjection(Center, Radius, Index);
 		GatherShadowCasters(LightViewProjection);
 
-		Renderer->TEMP_SetDirectionalShadow(ShadowMap, LightViewProjection);
+		const FShadowAtlasTile& Tile = Proxy->GetTile(Index);
 
-		// caster가 없어도 그린다.
-		Renderer->RenderShadowDepth(ShadowMap, LightViewProjection, ShadowCasters);
+		// 셰이더는 아직 Directional 그림자만 읽는다. Local 라이트 값으로 덮어쓰지 않게 Directional일 때만 올린다.
+		if (bDirectional)
+			Renderer->TEMP_SetDirectionalShadow(LightViewProjection, Tile.GetAtlasScaleOffset());
+
+		// caster가 없어도 그린다 (타일은 프레임 시작에 1.0으로 지워져 있다).
+		Renderer->RenderShadowDepth(Atlas, Tile, LightViewProjection, ShadowCasters);
 	}
 }
 

@@ -50,11 +50,14 @@ constexpr uint32 ClusteredSlices = 32;
 constexpr uint32 MaxLightsPerCell = 32;
 constexpr uint32 CellStride = MaxLightsPerCell + 1;
 
+// UberLit.hlsl cbuffer ShadowConstants(b6)와 바이트 단위로 같아야 한다.
 struct FShadowConstants
 {
-	//여기에 그림자에 필요한 상수 값들을 추가
 	FMatrix DirectionalLightViewProjection;
+	// 아틀라스 안 Directional 타일 위치. AtlasUV = ShadowUV * xy + zw (FShadowAtlasTile::GetAtlasScaleOffset)
+	FVector4 DirectionalAtlasScaleOffset;
 };
+static_assert(sizeof(FShadowConstants) == 80, "UberLit.hlsl cbuffer ShadowConstants 크기와 맞아야 한다");
 
 
 // UberLit.hlsl의 cbuffer Lighting과 바이트 단위로 같아야 한다. 모든 구조체를 16바이트 배수로 맞춘다.
@@ -222,9 +225,10 @@ public:
 	void RenderQueueSorting(FRenderQueue& InQueue, const FMatrix& ViewProjection, const FVector& CameraWorldPos);
 
 	// Shadow Depth Pass: 불투명만 PS 없이 그려 라이트 시점의 깊이 버퍼를 채운다
-	void RenderShadowDepth(FTexture2D* ShadowMap, const FMatrix& ViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters);
+	void RenderShadowDepth(FTexture2D* Atlas, const FShadowAtlasTile& Tile, const FMatrix& ViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters);
 
-	void TEMP_SetDirectionalShadow(FTexture2D* ShadowMap, const FMatrix& LightViewProjection);
+	void SetShadowAtlas(FTexture2D* ShadowMap);
+	void TEMP_SetDirectionalShadow(const FMatrix& LightViewProjection, const FVector4& AtlasScaleOffset);
 
 	// Depth Prepass: 불투명만 PS 없이 그려 깊이 버퍼를 채운다. RenderQueueSorting 뒤, RenderOpaque 전에 부른다.
 	// 같은 VS·행렬이라 깊이가 비트 단위로 같으므로 본 패스는 LESS_EQUAL로 통과한다.
@@ -314,8 +318,8 @@ private:
 	TUniquePtr<FShadowDepthRenderer> ShadowDepthRenderer{};
 	TUniquePtr<FConstantBuffer> ShadowCB;
 
-	// 소유는 라이트 프록시. Directional 그림자를 그리지 않은 프레임에는 nullptr이라 메인 패스가 바인딩을 건너뛴다.
-	FTexture2D *DIrectionalShadowMap = nullptr;
+	// 소유는
+	FTexture2D *ShadowMapAtlas = nullptr;
 
 	EViewMode CurrentViewMode = EViewMode::Lit_Lambert;
 };

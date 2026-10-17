@@ -3,9 +3,13 @@
 #include "Buffer.h"
 #include "PipelineState.h"
 #include "Texture2D.h"
+#include "ShadowAtlas.h"
 #include "Containers/Array.h"
 
 class FPrimitiveSceneProxy;
+
+// 메인 패스(UberLit)가 섀도우 아틀라스를 읽는 슬롯. 섀도우 패스가 DSV로 묶기 전에 이 슬롯을 비워야 한다.
+inline constexpr uint32 ShadowAtlasSRVSlot = 20;
 
 // ShadowDepth.hlsl cbuffer ShadowDepthConstants(b0)와 바이트 단위로 같아야 한다.
 struct FShadowDepthPassConstants
@@ -25,7 +29,8 @@ public:
 	FShadowDepthRenderer& operator=(const FShadowDepthRenderer&) = delete;
 
 	bool Init();
-	void OnRender(FTexture2D* ShadowMap, const FMatrix& LightViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters);
+	// 아틀라스의 Tile 영역에만 caster 깊이를 그린다. 지우지 않으므로 아틀라스는 프레임 시작에 한 번 지워 둬야 한다.
+	void OnRender(FTexture2D* Atlas, const FShadowAtlasTile& Tile, const FMatrix& LightViewProjection, const TArray<FPrimitiveSceneProxy*>& ShadowCasters);
 
 private:
 	void DrawCaster(const FPrimitiveSceneProxy* Caster);
