@@ -24,7 +24,15 @@ public:
 
 	//index : PointLight 6면 ViewProj 가져오는 용도, 다른 라이트는 0을 사용
 	virtual FMatrix GetShadowViewPorjection(FVector Center, float Radius, int index = 0) const = 0;
-	const uint32 GetShadowResolution() const { return ShadowResolution; }
+
+	// 섀도우맵 해상도는 2의 거듭제곱만 쓴다 (아틀라스 타일을 4등분으로 나눠 배치하기 위해).
+	static constexpr uint32 MinShadowResolution = 512;
+	static constexpr uint32 MaxShadowResolution = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;   // 16384, D3D11 텍스처 한 변 최대 크기
+	// 저장 파일 등으로 범위를 벗어난 값이 들어와도 항상 유효한 해상도를 돌려준다.
+	uint32 GetShadowResolution() const;
+	void SetShadowResolution(uint32 InResolution);
+
+	virtual void PostEditChangeProperty(const FProperty& Property) override;
 
 	virtual class FLightSceneProxy* CreateSceneProxy() const
 	{
