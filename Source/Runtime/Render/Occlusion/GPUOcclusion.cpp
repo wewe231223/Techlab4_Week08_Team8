@@ -1,5 +1,6 @@
 ﻿#include "EnginePCH.h"
 #include "GPUOcclusion.h"
+#include "Render/GraphicsMemoryStats.h"
 
 #include "Render/Renderer.h"
 #include "Render/RenderCommand.h"
@@ -164,6 +165,7 @@ void Cull(uint3 Id : SV_DispatchThreadID)
 		Desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		ComPtr<ID3D11Buffer> Buffer;
 		Device->CreateBuffer(&Desc, nullptr, Buffer.GetAddressOf());
+		FGraphicsMemoryStats::TrackResource(Buffer.Get());
 		return Buffer;
 	}
 
@@ -241,6 +243,7 @@ bool FGPUOcclusion::EnsureTargets(uint32 Width, uint32 Height)
 	DepthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 	if (FAILED(Device->CreateTexture2D(&DepthDesc, nullptr, OccluderDepth.GetAddressOf())))
 		return false;
+	FGraphicsMemoryStats::TrackResource(OccluderDepth.Get());
 
 	D3D11_DEPTH_STENCIL_VIEW_DESC DsvDesc{};
 	DsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
@@ -269,9 +272,13 @@ bool FGPUOcclusion::EnsureTargets(uint32 Width, uint32 Height)
 	HiZDesc.SampleDesc.Count = 1;
 	HiZDesc.Usage = D3D11_USAGE_DEFAULT;
 	HiZDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	if (FAILED(Device->CreateTexture2D(&HiZDesc, nullptr, HiZ.GetAddressOf())) ||
-		FAILED(Device->CreateShaderResourceView(HiZ.Get(), nullptr, HiZSRV.GetAddressOf())))
+	if (FAILED(Device->CreateTexture2D(&HiZDesc, nullptr, HiZ.GetAddressOf()))) {
 		return false;
+	}
+	FGraphicsMemoryStats::TrackResource(HiZ.Get());
+	if (FAILED(Device->CreateShaderResourceView(HiZ.Get(), nullptr, HiZSRV.GetAddressOf()))) {
+		return false;
+	}
 
 	HiZMipSRVs.resize(MipCount);
 	HiZMipUAVs.resize(MipCount);
@@ -323,9 +330,13 @@ bool FGPUOcclusion::EnsureItemCapacity(uint32 Count)
 	ItemSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
 	ItemSrvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
 	ItemSrvDesc.Buffer.NumElements = NewCapacity;
-	if (FAILED(Device->CreateBuffer(&ItemDesc, nullptr, ItemBuffer.GetAddressOf())) ||
-		FAILED(Device->CreateShaderResourceView(ItemBuffer.Get(), &ItemSrvDesc, ItemSRV.GetAddressOf())))
+	if (FAILED(Device->CreateBuffer(&ItemDesc, nullptr, ItemBuffer.GetAddressOf()))) {
 		return false;
+	}
+	FGraphicsMemoryStats::TrackResource(ItemBuffer.Get());
+	if (FAILED(Device->CreateShaderResourceView(ItemBuffer.Get(), &ItemSrvDesc, ItemSRV.GetAddressOf()))) {
+		return false;
+	}
 
 	D3D11_BUFFER_DESC ResultDesc{};
 	ResultDesc.ByteWidth = NewCapacity * sizeof(uint32);
@@ -335,9 +346,13 @@ bool FGPUOcclusion::EnsureItemCapacity(uint32 Count)
 	ResultUavDesc.Format = DXGI_FORMAT_R32_UINT;
 	ResultUavDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 	ResultUavDesc.Buffer.NumElements = NewCapacity;
-	if (FAILED(Device->CreateBuffer(&ResultDesc, nullptr, ResultBuffer.GetAddressOf())) ||
-		FAILED(Device->CreateUnorderedAccessView(ResultBuffer.Get(), &ResultUavDesc, ResultUAV.GetAddressOf())))
+	if (FAILED(Device->CreateBuffer(&ResultDesc, nullptr, ResultBuffer.GetAddressOf()))) {
 		return false;
+	}
+	FGraphicsMemoryStats::TrackResource(ResultBuffer.Get());
+	if (FAILED(Device->CreateUnorderedAccessView(ResultBuffer.Get(), &ResultUavDesc, ResultUAV.GetAddressOf()))) {
+		return false;
+	}
 
 	D3D11_BUFFER_DESC StagingDesc{};
 	StagingDesc.ByteWidth = NewCapacity * sizeof(uint32);
@@ -345,6 +360,7 @@ bool FGPUOcclusion::EnsureItemCapacity(uint32 Count)
 	StagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 	if (FAILED(Device->CreateBuffer(&StagingDesc, nullptr, ResultStaging.GetAddressOf())))
 		return false;
+	FGraphicsMemoryStats::TrackResource(ResultStaging.Get());
 
 	ItemCapacity = NewCapacity;
 	return true;

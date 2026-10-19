@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Buffer.h"
+#include "GraphicsMemoryStats.h"
 
 FBuffer::FBuffer(ID3D11Device* Device, const D3D11_BUFFER_DESC& Desc, const void* InitialData)
 {
@@ -21,6 +22,7 @@ FBuffer::FBuffer(ID3D11Device* Device, const D3D11_BUFFER_DESC& Desc, const void
 	{
 		HTR_LOG(Warning, "Failed To Create Buffer!");
 	}
+	FGraphicsMemoryStats::TrackResource(Buffer.Get());
 }
 
 FConstantBuffer::FConstantBuffer(ID3D11Device* Device, const D3D11_BUFFER_DESC& Desc)

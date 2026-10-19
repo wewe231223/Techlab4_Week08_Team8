@@ -5,6 +5,7 @@
 #include "Core/StatOverlay.h"
 #include "Core/Stats/LightweightStats.h"
 #include "Render/RenderCommand.h"
+#include "Render/GraphicsMemoryStats.h"
 
 #include <algorithm>
 #include <cassert>
@@ -412,6 +413,37 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 			FStatOverlay::GetObjectAllocationCount()), ValueColor});
 		Lines.Add({std::format("  Process {:.2f} MB",
 			static_cast<double>(FStatOverlay::GetProcessWorkingSetBytes()) / BytesPerMegabyte), ValueColor});
+	}
+
+	if (FStatOverlay::IsEnabled(EStatFlags::GPUMemory) || FStatOverlay::IsEnabled(EStatFlags::Memory)) {
+		constexpr ImU32 OverBudgetColor{ IM_COL32(255, 90, 90, 255) };
+		const uint64 TextureBytes{ FGraphicsMemoryStats::GetTextureBytes() };
+		const uint64 BufferBytes{ FGraphicsMemoryStats::GetBufferBytes() };
+		Lines.Add({ "GPU Resources (Logical Size)", TitleColor });
+		Lines.Add({ std::format("  Tracked total {:.2f} MiB", static_cast<double>(TextureBytes + BufferBytes) / BytesPerMegabyte), ValueColor });
+		Lines.Add({ std::format("  Textures      {:.2f} MiB ({} resources)", static_cast<double>(TextureBytes) / BytesPerMegabyte, FGraphicsMemoryStats::GetTextureCount()), ValueColor });
+		Lines.Add({ std::format("  Buffers       {:.2f} MiB ({} resources)", static_cast<double>(BufferBytes) / BytesPerMegabyte, FGraphicsMemoryStats::GetBufferCount()), ValueColor });
+		if (const uint64 UnmeasuredCount{ FGraphicsMemoryStats::GetUnmeasuredResourceCount() }; UnmeasuredCount != 0) {
+			Lines.Add({ std::format("  Unmeasured resources: {}", UnmeasuredCount), OverBudgetColor });
+		}
+		Lines.Add({ "GPU Memory (DXGI Used / Budget)", TitleColor });
+		if (FStatOverlay::HasGPULocalMemoryInfo()) {
+			const uint64 Usage{ FStatOverlay::GetGPULocalUsageBytes() };
+			const uint64 Budget{ FStatOverlay::GetGPULocalBudgetBytes() };
+			const ImU32 Color{ Usage > Budget ? OverBudgetColor : ValueColor };
+			Lines.Add({ std::format("  Local     {:.2f} / {:.2f} MiB", static_cast<double>(Usage) / BytesPerMegabyte, static_cast<double>(Budget) / BytesPerMegabyte), Color });
+		} else {
+			Lines.Add({ "  Local     N/A", ValueColor });
+		}
+
+		if (FStatOverlay::HasGPUNonLocalMemoryInfo()) {
+			const uint64 Usage{ FStatOverlay::GetGPUNonLocalUsageBytes() };
+			const uint64 Budget{ FStatOverlay::GetGPUNonLocalBudgetBytes() };
+			const ImU32 Color{ Usage > Budget ? OverBudgetColor : ValueColor };
+			Lines.Add({ std::format("  Non-local {:.2f} / {:.2f} MiB", static_cast<double>(Usage) / BytesPerMegabyte, static_cast<double>(Budget) / BytesPerMegabyte), Color });
+		} else {
+			Lines.Add({ "  Non-local N/A", ValueColor });
+		}
 	}
 
 	struct FProfileStatLine

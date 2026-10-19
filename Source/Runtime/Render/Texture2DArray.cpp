@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Texture2DArray.h"
+#include "GraphicsMemoryStats.h"
 
 FTexture2DArray::FTexture2DArray(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const D3D11_SUBRESOURCE_DATA* InitialData) {
 	if (!Device || InDesc.ArraySize == 0 || (InDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) != 0) {
@@ -26,6 +27,7 @@ FTexture2DArray::FTexture2DArray(ID3D11Device* Device, const D3D11_TEXTURE2D_DES
 		SRV.Reset();
 		Texture.Reset();
 	}
+	FGraphicsMemoryStats::TrackResource(Texture.Get());
 }
 
 FTexture2DArray::~FTexture2DArray() = default;

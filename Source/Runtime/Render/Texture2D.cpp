@@ -2,6 +2,7 @@
 #include "Texture2D.h"
 
 #include "RenderCommand.h"
+#include "GraphicsMemoryStats.h"
 
 
 FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const FImageData& Image)
@@ -36,6 +37,7 @@ FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc,
 	HRESULT hr = Device->CreateTexture2D(&InDesc, InitPtr, (ID3D11Texture2D**)Texture.GetAddressOf());
 	if (FAILED(hr)) { /* 기존 로그 그대로 */ return; }
 
+	FGraphicsMemoryStats::TrackResource(Texture.Get());
 	CreateViews(Device, InDesc);
 
 	if (bGenerateMips && InitialData && SRV)
@@ -52,6 +54,7 @@ FTexture2D::FTexture2D(ID3D11Device* Device, ComPtr<ID3D11Resource> SwapchainTex
 		return;
 	}
 	Texture = std::move(SwapchainTexture);
+	FGraphicsMemoryStats::TrackResource(Texture.Get());
 
 	Width = InDesc.Width;
 	Height = InDesc.Height;
