@@ -68,6 +68,8 @@ bool FShadowAtlas::UpdateTextureResource() {
 	}
 
 	mDepthTexture = std::move(DepthTexture);
+	++mResourceGeneration;
+	InvalidateCacheEntries();
 	return true;
 }
 
@@ -116,7 +118,11 @@ TArray<FShadowAtlas::FAllocation> FShadowAtlas::UpdateAllocations(const TArray<F
 			continue;
 		}
 		Allocations[Index] = Allocation;
-		mAllocations.Add(Request.mLightComponent, FCachedAllocation{ Allocation, Request.mResolution });
+		FCachedAllocation CachedAllocation{};
+		CachedAllocation.mAllocation = Allocation;
+		CachedAllocation.mRequestedResolution = Request.mResolution;
+		CachedAllocation.mGeneration = ++mAllocationGeneration;
+		mAllocations.Add(Request.mLightComponent, CachedAllocation);
 	}
 	// 어떤 페이지도 쓰지 않는 상태가 이어지면 아틀라스를 통째로 해제한다.
 	const uint32 KeepPageCount{ UpdateAtlasPageUsage() };
@@ -150,6 +156,57 @@ uint32 FShadowAtlas::GetPageCount() const {
 bool FShadowAtlas::HasLightChanged(const FRequest& Request) const {
 	const FCachedAllocation* CachedAllocation{ mAllocations.Find(Request.mLightComponent) };
 	return !CachedAllocation || CachedAllocation->mRequestedResolution != Request.mResolution || CachedAllocation->mAllocation.mViewCount != Request.mViewCount;
+}
+
+uint64 FShadowAtlas::GetResourceGeneration() const {
+	return mResourceGeneration;
+}
+
+uint64 FShadowAtlas::GetAllocationGeneration(const ULightComponent* LightComponent) const {
+	const FCachedAllocation* CachedAllocation{ mAllocations.Find(LightComponent) };
+	return CachedAllocation ? CachedAllocation->mGeneration : 0;
+}
+
+const FShadowCacheEntry* FShadowAtlas::GetCacheEntry(const ULightComponent* LightComponent, uint32 FaceIndex) const {
+	const FCachedAllocation* CachedAllocation{ mAllocations.Find(LightComponent) };
+	return CachedAllocation && FaceIndex < CachedAllocation->mAllocation.mViewCount ? &CachedAllocation->mCacheEntries[FaceIndex] : nullptr;
+}
+
+void FShadowAtlas::StoreCacheEntry(const ULightComponent* LightComponent, uint32 FaceIndex, FShadowCacheEntry Entry) {
+	FCachedAllocation* CachedAllocation{ mAllocations.Find(LightComponent) };
+	if (!CachedAllocation || FaceIndex >= CachedAllocation->mAllocation.mViewCount || !mDepthTexture || !mDepthTexture->GetRawPtr()) {
+		return;
+	}
+	const FTile& Tile{ CachedAllocation->mAllocation.mTiles[FaceIndex] };
+	Entry.mResourceGeneration = mResourceGeneration;
+	Entry.mAllocationGeneration = CachedAllocation->mGeneration;
+	Entry.mPageIndex = CachedAllocation->mAllocation.mPageIndex;
+	Entry.mTileX = Tile.mX;
+	Entry.mTileY = Tile.mY;
+	Entry.mResolution = Tile.mResolution;
+	Entry.mIsValid = true;
+	CachedAllocation->mCacheEntries[FaceIndex] = std::move(Entry);
+}
+
+void FShadowAtlas::InvalidatePageCacheEntries(uint32 PageIndex) {
+	for (auto& AllocationEntry : mAllocations) {
+		FCachedAllocation& CachedAllocation{ AllocationEntry.second };
+		if (CachedAllocation.mAllocation.mPageIndex != PageIndex) {
+			continue;
+		}
+		for (uint32 FaceIndex{}; FaceIndex < CachedAllocation.mAllocation.mViewCount; ++FaceIndex) {
+			CachedAllocation.mCacheEntries[FaceIndex].mIsValid = false;
+		}
+	}
+}
+
+void FShadowAtlas::InvalidateCacheEntries() {
+	for (auto& AllocationEntry : mAllocations) {
+		FCachedAllocation& CachedAllocation{ AllocationEntry.second };
+		for (uint32 FaceIndex{}; FaceIndex < CachedAllocation.mAllocation.mViewCount; ++FaceIndex) {
+			CachedAllocation.mCacheEntries[FaceIndex].mIsValid = false;
+		}
+	}
 }
 
 bool FShadowAtlas::IsValidRequest(const FRequest& Request) const {

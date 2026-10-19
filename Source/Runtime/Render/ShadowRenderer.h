@@ -69,7 +69,7 @@ private:
 	bool InitializeComparisonSampler();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
-	void DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile);
+	bool DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile, FShadowCacheEntry& OutEntry);
 	FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const;
 	bool InitializePreviewPass();
 	void RenderShadowPreview();

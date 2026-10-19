@@ -208,10 +208,9 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	PassInfo.ViewportSetting.Width = DepthTexture->GetWidth();
 	PassInfo.ViewportSetting.Height = DepthTexture->GetHeight();
 
-	for (uint32 PageIndex = 0; PageIndex < PageCount; ++PageIndex)
-	{
-
+	for (uint32 PageIndex{}; PageIndex < PageCount; ++PageIndex) {
 		PassInfo.DepthStencil.ArraySlice = PageIndex;
+		Atlas.InvalidatePageCacheEntries(PageIndex);
 		RenderCommand::BeginRenderPass(PassInfo);
 		RenderCommand::BindShaderProgram(mShadowShader);
 		RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -220,20 +219,24 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 		RenderCommand::BindConstantBuffer(0, mShadowViewCB.get(), EShaderBindFlagBits::Vertex);
 		RenderCommand::BindConstantBuffer(2, mShadowObjectCB.get(), EShaderBindFlagBits::Vertex);
 
-		for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index)
-		{
+		for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
 			const FShadowAtlasAllocation& Allocation{ Allocations[Index] };
 			const FShadowMapRequest& Request{ Requests[Index] };
-			if (Allocation.mViewCount == 0 ||
-				Allocation.mPageIndex != PageIndex ||
-				!SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset, Request.mViews[0].mCullBackFaces)) {
+			if (Allocation.mViewCount == 0 || Allocation.mPageIndex != PageIndex || !SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset, Request.mViews[0].mCullBackFaces)) {
 				continue;
 			}
 
 			const int32 FirstIndex{ static_cast<int32>(mShadowMapRenderParameters.Num()) };
 			for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
 				const FShadowAtlasTile& Tile{ Allocation.mTiles[FaceIndex] };
-				DrawShadowCasters(Scene, Request.mViews[FaceIndex], Tile);
+				FShadowCacheEntry Entry{};
+				Entry.mView = Request.mViews[FaceIndex];
+				Entry.mView.mCullBackFaces = Request.mViews[0].mCullBackFaces;
+				Entry.mDepthBiasPreset = NormalizeShadowDepthBiasPreset(static_cast<int32>(Request.mSettings.mDepthBiasPreset));
+				Entry.mSlopeScaledDepthBiasPreset = NormalizeShadowSlopeScaledDepthBiasPreset(static_cast<int32>(Request.mSettings.mSlopeScaledDepthBiasPreset));
+				if (DrawShadowCasters(Scene, Request.mViews[FaceIndex], Tile, Entry)) {
+					Atlas.StoreCacheEntry(Request.mLightComponent, FaceIndex, std::move(Entry));
+				}
 				FShadowMapRenderParameters Parameters{ BuildShadowMapRenderParameters(Request.mViews[FaceIndex], Request.mSettings, Tile) };
 				Parameters.mTextureIndex = 0;
 				Parameters.mArraySlice = PageIndex;
@@ -264,16 +267,20 @@ void FShadowRenderer::BindShadowMaps() {
 	RenderCommand::GetContext()->PSSetSamplers(mSamplerSlot, 1, &Sampler);
 }
 
-void FShadowRenderer::DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile) {
+bool FShadowRenderer::DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile, FShadowCacheEntry& OutEntry) {
 	GatherShadowCasters(Scene, mShadowRenderQueue, View, static_cast<int32>(Tile.mResolution));
+	OutEntry.mCasters.Reset();
+	OutEntry.mCasters.Reserve(mShadowRenderQueue.Num());
 	RenderCommand::SetViewport(Tile.mX, Tile.mY, Tile.mResolution, Tile.mResolution);
 	RenderCommand::UpdateBufferData(mShadowViewCB.get(), &View.mViewProjection, sizeof(FMatrix));
 	UStaticMesh* BoundMesh{};
 	uint32 BoundLOD{};
+	bool IsComplete{ true };
 	for (const FRenderPacket& Packet : mShadowRenderQueue) {
 		FVertexBuffer* VertexBuffer{ Packet.Mesh->GetVertexBuffer(Packet.LODIndex) };
 		FIndexBuffer* IndexBuffer{ Packet.Mesh->GetIndexBuffer(Packet.LODIndex) };
 		if (!VertexBuffer || !VertexBuffer->GetBuffer() || !IndexBuffer || !IndexBuffer->GetBuffer() || Packet.StartIndex > IndexBuffer->GetIndexCount() || Packet.IndexCount > IndexBuffer->GetIndexCount() - Packet.StartIndex) {
+			IsComplete = false;
 			continue;
 		}
 		if (BoundMesh != Packet.Mesh || BoundLOD != Packet.LODIndex) {
@@ -283,7 +290,16 @@ void FShadowRenderer::DrawShadowCasters(FScene& Scene, const FShadowView& View, 
 		}
 		RenderCommand::UpdateBufferData(mShadowObjectCB.get(), &Packet.Proxy->GetLocalToWorld(), sizeof(FMatrix));
 		RenderCommand::DrawIndexed(Packet.IndexCount, Packet.StartIndex);
+		FShadowCasterState Caster{};
+		Caster.mComponentId = Packet.Proxy->GetComponent()->GetUUID();
+		Caster.mMeshId = Packet.Mesh->GetUUID();
+		Caster.mLocalToWorld = Packet.Proxy->GetLocalToWorld();
+		Caster.mLODIndex = Packet.LODIndex;
+		Caster.mStartIndex = Packet.StartIndex;
+		Caster.mIndexCount = Packet.IndexCount;
+		OutEntry.mCasters.Add(Caster);
 	}
+	return IsComplete;
 }
 
 FTexture2DArray* FShadowRenderer::GetShadowDepthTexture() const {

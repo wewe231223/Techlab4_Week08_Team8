@@ -2,6 +2,7 @@
 
 #include "Containers/Array.h"
 #include "Containers/Map.h"
+#include "ShadowCacheEntry.h"
 #include "ShadowMap.h"
 
 class FTexture2DArray;
@@ -39,6 +40,8 @@ private:
 		FAllocation mAllocation{};
 		uint32 mRequestedResolution{};
 		bool mReallocationRequested{};
+		uint64 mGeneration{};
+		FShadowCacheEntry mCacheEntries[PointShadowFaceCount]{};
 	};
 
 public:
@@ -57,8 +60,14 @@ public:
 	void Free(const ULightComponent* LightComponent);
 	uint32 GetPageCount() const;
 	bool HasLightChanged(const FRequest& Request) const;
+	uint64 GetResourceGeneration() const;
+	uint64 GetAllocationGeneration(const ULightComponent* LightComponent) const;
+	const FShadowCacheEntry* GetCacheEntry(const ULightComponent* LightComponent, uint32 FaceIndex = 0) const;
+	void StoreCacheEntry(const ULightComponent* LightComponent, uint32 FaceIndex, FShadowCacheEntry Entry);
+	void InvalidatePageCacheEntries(uint32 PageIndex);
 
 private:
+	void InvalidateCacheEntries();
 	bool IsValidRequest(const FRequest& Request) const;
 	int32 GetTargetLevel(const FRequest& Request) const;
 	uint32 CountAvailableTiles(const FPage& Page, int32 TargetLevel) const;
@@ -76,6 +85,8 @@ private:
 	uint32 mAtlasResolution{};
 	uint32 mMaxPageCount{};
 	int32 mLevelCount{};
+	uint64 mResourceGeneration{};
+	uint64 mAllocationGeneration{};
 	TArray<FPage> mPages{};
 	TMap<const ULightComponent*, FCachedAllocation> mAllocations{};
 	TSharedPtr<FTexture2DArray> mDepthTexture{};
