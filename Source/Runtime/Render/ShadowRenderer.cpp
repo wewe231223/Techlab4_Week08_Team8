@@ -11,6 +11,7 @@
 #include "RenderResourceManager.h"
 #include "Shader.h"
 #include "Texture2D.h"
+#include "Texture2DArray.h"
 
 #include <algorithm>
 #include <bit>
@@ -39,6 +40,7 @@ bool FShadowRenderer::Render(FScene& Scene, int32 AtlasResolution) {
 }
 
 void FShadowRenderer::Reset() {
+	mDepthTexture.reset();
 	mShadowRequests.Reset();
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
@@ -55,7 +57,7 @@ bool FShadowRenderer::IsShadowPcfEnabled() const {
 }
 
 uint32 FShadowRenderer::GetShadowMapCount() const {
-	return mShadowMapReady ? mShadowMapRenderParameters.Num() : 0;
+	return GetShadowDepthTexture() ? mShadowMapRenderParameters.Num() : 0;
 }
 
 bool FShadowRenderer::InitializeComparisonSampler() {
@@ -122,7 +124,7 @@ bool FShadowRenderer::IsValidShadowView(const FShadowView& View) {
 }
 
 bool FShadowRenderer::IsValidShadowRequest(const FShadowMapRequest& Request) {
-	if (!Request.mSettings.mCastShadows || (Request.mViewCount != 1 && Request.mViewCount != PointShadowFaceCount)) {
+	if (!Request.mLightComponent || !Request.mSettings.mCastShadows || (Request.mViewCount != 1 && Request.mViewCount != PointShadowFaceCount)) {
 		return false;
 	}
 	for (uint32 FaceIndex{}; FaceIndex < Request.mViewCount; ++FaceIndex) {
@@ -133,196 +135,23 @@ bool FShadowRenderer::IsValidShadowRequest(const FShadowMapRequest& Request) {
 	return true;
 }
 
-TArray<FShadowRenderer::FShadowAtlasAllocation> FShadowRenderer::BuildShadowAtlasAllocations(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution, uint32 &OutPageCount) {
-
-	TArray<FShadowAtlasAllocation> Allocations{};
-	Allocations.SetNum(Requests.Num());
-
-
-	TArray<uint32> SortedIndices{};
+TArray<FShadowRenderer::FShadowAtlasAllocation> FShadowRenderer::BuildShadowAtlasAllocations(FShadowAtlas& Atlas, const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution) {
+	Atlas.Initialize(AtlasResolution, static_cast<uint32>(mMaxAtlasPageCount));
+	TArray<FShadowAtlas::FRequest> AllocationRequests{};
+	AllocationRequests.SetNum(Requests.Num());
 	for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
-		if (IsValidShadowRequest(Requests[Index])) {
-			SortedIndices.Add(Index);
+		const FShadowMapRequest& Request{ Requests[Index] };
+		if (IsValidShadowRequest(Request)) {
+			// 요청 해상도를 2의 거듭제곱으로 맞춘다.
+			AllocationRequests[Index] = FShadowAtlas::FRequest{ Request.mLightComponent, static_cast<uint32>(NormalizeShadowMapResolution(Request.mSettings.mResolution)), Request.mViewCount };
 		}
 	}
-
-	std::sort(SortedIndices.begin(), SortedIndices.end(), [&Requests](uint32 Left, uint32 Right) {
-		const int32 LeftResolution{ NormalizeShadowMapResolution(Requests[Left].mSettings.mResolution) };
-		const int32 RightResolution{ NormalizeShadowMapResolution(Requests[Right].mSettings.mResolution) };
-		return LeftResolution != RightResolution ? LeftResolution > RightResolution : Left < Right;
-	});
-
-
-	constexpr int32 LevelCount{ static_cast<int32>(std::bit_width(static_cast<uint32>(mMaxAtlasResolution / MinShadowMapResolution))) };
-
-	//FFreeTiles = 아틀라스 텍스쳐
-	using FFreeTiles = std::array<TArray<FShadowAtlasTile>, LevelCount>;
-	TArray<FFreeTiles> Pages;
-
-	//첫 페이지 추가
-	FFreeTiles& FirstPage{ Pages.AddDefaulted_GetRef() };
-
-	// 0번째 페이지의 0레벨 초기화
-	Pages[0][0].Add(FShadowAtlasTile{0, 0, AtlasResolution});
-
-	// 남은 빈 공간을 TargetLevel 크기 타일 개수로 환산한다.
-	// 한 레벨 내려갈 때마다 4개로 쪼개지므로 레벨 L의 빈 타일 하나는 4^(TargetLevel - L)개에 해당한다.
-	auto CountAvailable = [](const FFreeTiles& Atlas, const int32 TargetLevel)
-	{
-		uint32 AvailableTileCount = 0;
-
-		for (int32 Level{}; Level <= TargetLevel; ++Level)
-			AvailableTileCount += Atlas[Level].Num() * (1u << (2 * (TargetLevel - Level)));
-
-		return AvailableTileCount;
-	};
-
-	for (uint32 Index : SortedIndices) {
-
-		// 요청 해상도를 2의 거듭제곱으로 맞춘다. 아틀라스보다 크면 들어갈 수 없으므로 건너뛴다.
-		const uint32 Resolution{ static_cast<uint32>(NormalizeShadowMapResolution(Requests[Index].mSettings.mResolution)) };
-		if (Resolution > AtlasResolution) {
-			continue;
-		}
-
-		// 이 해상도의 타일이 놓일 레벨. 둘 다 2의 거듭제곱이므로 log2(AtlasResolution / Resolution)와 같다.
-		int32 TargetLevel{ static_cast<int32>(std::countr_zero(AtlasResolution / Resolution)) };
-		if (TargetLevel < 0 || TargetLevel >= LevelCount)
-		{
-			continue;
-		}
-
-		// 빈 페이지 한 장에 들어가는 타일 수는 4^TargetLevel이다. 이보다 면이 많으면 새 페이지를 열어도 들어가지 않으므로
-		// 해상도를 반씩 낮춰 한 페이지에 모든 면이 들어가게 한다. (예: 4096 아틀라스의 2048 포인트 라이트 6면 -> 1024)
-		// 여러 면을 쓰는 건 포인트 라이트뿐이고, 포인트 라이트 뷰는 해상도와 무관하므로 타일 크기만 줄이면 된다.
-		while ((1u << (2 * TargetLevel)) < Requests[Index].mViewCount
-			&& TargetLevel + 1 < LevelCount
-			&& (AtlasResolution >> (TargetLevel + 1)) >= static_cast<uint32>(MinShadowMapResolution))
-		{
-			++TargetLevel;
-		}
-		if ((1u << (2 * TargetLevel)) < Requests[Index].mViewCount)
-		{
-			continue;
-		}
-
-		//첫 페이지부터 읽을 수 있는지 확인
-
-		int32 PageIndex = -1;
-		for (int32 P = 0; P < Pages.Num(); ++P)
-		{
-			if (CountAvailable(Pages[P], TargetLevel) >= Requests[Index].mViewCount)
-			{
-				PageIndex = P;
-				break;
-			}
-		}
-
-		//어느 페이지에도 할당할 수 없다면 어떻게 처리해야 할까 -> Pages를 하나 늘려서 거기다 저장
-		if (PageIndex == -1)
-		{
-			if (Pages.Num() >= mMaxAtlasPageCount)
-			{
-				continue;
-			}
-			FFreeTiles& NewPage{ Pages.AddDefaulted_GetRef() };
-			NewPage[0].Add(FShadowAtlasTile{ 0, 0, AtlasResolution });
-			PageIndex = Pages.Num() - 1;
-		}
-
-		FFreeTiles& Atlas = Pages[PageIndex];
-
-		FShadowAtlasAllocation& Allocation{ Allocations[Index] };
-		Allocation.mViewCount = Requests[Index].mViewCount;
-		Allocation.mPageIndex = PageIndex;
-		for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
-
-
-			// TargetLevel부터 위(더 큰 타일) 방향으로 올라가며 빈 타일이 있는 가장 작은 레벨을 찾는다.
-			// 위의 개수 확인을 통과했으므로 레벨 0을 넘어가기 전에 반드시 찾는다.
-			int32 AvailableLevel =  TargetLevel;
-			while (AvailableLevel > 0 && Atlas[AvailableLevel].IsEmpty()) {
-				--AvailableLevel;
-			}
-			// 가장 최근에 추가된 타일을 꺼낸다. 방금 쪼갠 타일의 형제부터 쓰게 되어 배치가 한쪽으로 모인다.
-			FShadowAtlasTile Tile{ Atlas[AvailableLevel].Last() };
-			Atlas[AvailableLevel].RemoveLast();
-
-			// 꺼낸 타일이 필요한 크기보다 크면 TargetLevel이 될 때까지 4등분한다.
-			// 왼쪽 위 사분면은 계속 쪼갤 타일로 남기고, 나머지 세 사분면은 한 단계 아래 레벨의 빈 타일로 돌려준다.
-			while (AvailableLevel < TargetLevel) {
-				Tile.mResolution /= 2;
-				++AvailableLevel;
-				Atlas[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY, Tile.mResolution }); // 오른쪽 위
-				Atlas[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX, Tile.mY + Tile.mResolution, Tile.mResolution }); // 왼쪽 아래
-				Atlas[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY + Tile.mResolution, Tile.mResolution }); // 오른쪽 아래
-			}
-			// 남은 왼쪽 위 사분면이 정확히 요청 크기이므로 이 면에 할당한다.
-			Allocation.mTiles[FaceIndex] = Tile;
-		}
-	}
-
-	OutPageCount = Pages.Num();
-	return Allocations;
+	return Atlas.UpdateAllocations(AllocationRequests);
 }
-
 
 int32 FShadowRenderer::NormalizeAtlasResolution(int32 Resolution) {
 	const uint32 Size{ static_cast<uint32>(std::clamp(Resolution, MinShadowMapResolution, mMaxAtlasResolution)) };
 	return static_cast<int32>(std::bit_ceil(Size));
-}
-
-uint32 FShadowRenderer::UpdateAtlasPageUsage(uint32 UsedPageCount) {
-	// 페이지(층)마다 연속으로 쓰이지 않은 렌더 횟수를 센다.
-	// 할당은 매번 0번 페이지부터 채우므로 이번에 쓰는 페이지는 항상 [0, UsedPageCount)이다.
-	for (uint32 Page{}; Page < static_cast<uint32>(mMaxAtlasPageCount); ++Page) {
-		mAtlasPageIdleCounts[Page] = Page < UsedPageCount ? 0 : std::min(mAtlasPageIdleCounts[Page] + 1, mAtlasPageIdleDelay);
-	}
-
-	// 지금 있는 층 중 쓰지 않게 된 지 mAtlasPageIdleDelay번이 안 된 페이지는 남겨 둔다.
-	// Texture2DArray는 층 하나만 해제할 수 없으므로, 남길 페이지 중 가장 뒤 번호까지를 새 층 수로 쓴다.
-	const uint32 ExistingPageCount{ mDepthTexture ? std::min(mDepthTexture->GetArraySize(), static_cast<uint32>(mMaxAtlasPageCount)) : 0 };
-	uint32 KeepPageCount{ UsedPageCount };
-	for (uint32 Page{ UsedPageCount }; Page < ExistingPageCount; ++Page) {
-		if (mAtlasPageIdleCounts[Page] < mAtlasPageIdleDelay) {
-			KeepPageCount = Page + 1;
-		}
-	}
-	return KeepPageCount;
-}
-
-bool FShadowRenderer::InitializeAtlasResource(int32 Resolution, int32 PageCount) {
-	const uint32 Size{ static_cast<uint32>(NormalizeAtlasResolution(Resolution)) };
-	// 지금 쓰는 페이지와, 쓰지 않게 된 지 오래되지 않은 페이지까지 남긴 층 수.
-	const uint32 KeepPageCount{ UpdateAtlasPageUsage(static_cast<uint32>(PageCount)) };
-	if (mDepthTexture && mDepthTexture->GetRawPtr()
-		&& mDepthTexture->GetSRV()
-		&& mDepthTexture->GetDSV()
-		&& mDepthTexture->GetWidth() == Size
-		&& mDepthTexture->GetHeight() == Size
-		&& mDepthTexture->GetArraySize() == KeepPageCount) {
-		return true;
-	}
-
-	// 페이지가 늘었거나, 오래 쓰지 않은 페이지를 해제할 때 다시 만든다. 내용은 매 프레임 다시 그리므로 옮길 필요가 없다.
-	D3D11_TEXTURE2D_DESC Desc{};
-	Desc.Width = Size;
-	Desc.Height = Size;
-	Desc.MipLevels = 1;
-	Desc.ArraySize = KeepPageCount;
-	Desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-	Desc.SampleDesc.Count = 1;
-	Desc.Usage = D3D11_USAGE_DEFAULT;
-	Desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
-
-	// 페이지가 1장이어도 셰이더는 Texture2DArray로 읽으므로 배열 뷰로 만든다.
-	TUniquePtr<FTexture2D> DepthTexture{ RenderCommand::CreateTexture2D(Desc, nullptr, true) };
-	if (!DepthTexture || !DepthTexture->GetRawPtr() || !DepthTexture->GetDSV() || !DepthTexture->GetSRV()) {
-		return false;
-	}
-
-	mDepthTexture = std::move(DepthTexture);
-	return true;
 }
 
 bool FShadowRenderer::InitializeShadowPass() {
@@ -343,32 +172,26 @@ bool FShadowRenderer::InitializeShadowPass() {
 }
 
 bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution) {
+	mDepthTexture.reset();
 	mShadowMapReady = false;
 	mPreviewReady = false;
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
 	const uint32 Size{ static_cast<uint32>(NormalizeAtlasResolution(AtlasResolution)) };
 
-	uint32 PageCount = 0;
-	const TArray<FShadowAtlasAllocation> Allocations{ BuildShadowAtlasAllocations(Requests, Size, PageCount) };
+	FShadowAtlas& Atlas{ Scene.GetShadowAtlas() };
+	const TArray<FShadowAtlasAllocation> Allocations{ BuildShadowAtlasAllocations(Atlas, Requests, Size) };
+	const uint32 PageCount{ Atlas.GetPageCount() };
 
 	uint32 ParameterCount{};
 	for (const FShadowAtlasAllocation& Allocation : Allocations) {
 		ParameterCount += Allocation.mViewCount;
 	}
 
-	//TODO : 아틀라스를 다루는 클래스를 만들면, 모든 라이트가 해재되었을 때가 아닌, 아틀라스 텍스쳐 단위로 추적하도록 변경
-	if (ParameterCount == 0) {
-		// 이번에는 어떤 페이지도 쓰지 않는다. 모든 페이지가 오래 쓰이지 않으면 아틀라스를 통째로 해제한다.
-		// 다시 필요해지면 InitializeAtlasResource가 만든다.
-		if (UpdateAtlasPageUsage(0) == 0) {
-			mDepthTexture.reset();
-		}
+	if (ParameterCount == 0 || !InitializeShadowPass() || !Atlas.UpdateTextureResource()) {
 		return false;
 	}
-	if (!InitializeShadowPass() || !InitializeAtlasResource(static_cast<int32>(Size), PageCount)) {
-		return false;
-	}
+	mDepthTexture = Atlas.GetDepthTexture();
 	if (!mShadowMapBuffer || mShadowMapBuffer->GetMaxCount() < ParameterCount) {
 		mShadowMapBuffer = RenderCommand::CreateDynamicStructuredBuffer(sizeof(FShadowMapRenderParameters), ParameterCount);
 	}
@@ -377,11 +200,11 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	}
 	mShadowMapRenderParameters.Reserve(ParameterCount);
 
-	FTexture2D* DepthTexture{ mDepthTexture.get() };
+	const TSharedPtr<FTexture2DArray> DepthTexture{ mDepthTexture.lock() };
 	RenderCommand::UnbindShaderResource(mTextureSlot, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Compute);
 	
 	FRenderingInfo PassInfo{};
-	PassInfo.DepthStencil.Texture = DepthTexture;
+	PassInfo.DepthStencil.Texture = DepthTexture.get();
 	PassInfo.ViewportSetting.Width = DepthTexture->GetWidth();
 	PassInfo.ViewportSetting.Height = DepthTexture->GetHeight();
 
@@ -416,9 +239,7 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 				Parameters.mArraySlice = PageIndex;
 				mShadowMapRenderParameters.Add(Parameters);
 			}
-			if (Request.mLightComponent) {
-				mShadowMapAllocations.Add(Request.mLightComponent, FShadowMapAllocation{ FirstIndex, Allocation.mViewCount });
-			}
+			mShadowMapAllocations.Add(Request.mLightComponent, FShadowMapAllocation{ FirstIndex, Allocation.mViewCount });
 			mShadowMapReady = true;
 		}
 
@@ -433,12 +254,12 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 }
 
 void FShadowRenderer::BindShadowMaps() {
-	if (FTexture2D* Texture{ GetShadowDepthTexture() }) {
+	if (FTexture2DArray* Texture{ GetShadowDepthTexture() }) {
 		RenderCommand::BindShaderResource(mTextureSlot, Texture, EShaderBindFlagBits::Pixel);
 	} else {
 		RenderCommand::UnbindShaderResource(mTextureSlot, EShaderBindFlagBits::Pixel);
 	}
-	RenderCommand::BindShaderResource(mBufferSlot, mShadowMapReady ? mShadowMapBuffer.get() : nullptr, EShaderBindFlagBits::Pixel);
+	RenderCommand::BindShaderResource(mBufferSlot, GetShadowDepthTexture() ? mShadowMapBuffer.get() : nullptr, EShaderBindFlagBits::Pixel);
 	ID3D11SamplerState* Sampler{ mComparisonSampler.Get() };
 	RenderCommand::GetContext()->PSSetSamplers(mSamplerSlot, 1, &Sampler);
 }
@@ -465,8 +286,8 @@ void FShadowRenderer::DrawShadowCasters(FScene& Scene, const FShadowView& View, 
 	}
 }
 
-FTexture2D* FShadowRenderer::GetShadowDepthTexture() const {
-	return mShadowMapReady ? mDepthTexture.get() : nullptr;
+FTexture2DArray* FShadowRenderer::GetShadowDepthTexture() const {
+	return mShadowMapReady ? mDepthTexture.lock().get() : nullptr;
 }
 
 const TArray<FShadowMapRenderParameters>& FShadowRenderer::GetShadowMapRenderParameters() const {
@@ -475,7 +296,7 @@ const TArray<FShadowMapRenderParameters>& FShadowRenderer::GetShadowMapRenderPar
 
 const FShadowMapRenderParameters* FShadowRenderer::GetShadowMapRenderParameters(const ULightComponent* LightComponent, uint32 FaceIndex) const {
 	const FShadowMapAllocation* Allocation{ mShadowMapAllocations.Find(LightComponent) };
-	if (!mShadowMapReady || !Allocation || FaceIndex >= Allocation->mViewCount || Allocation->mFirstIndex < 0) {
+	if (!GetShadowDepthTexture() || !Allocation || FaceIndex >= Allocation->mViewCount || Allocation->mFirstIndex < 0) {
 		return nullptr;
 	}
 	const uint32 Index{ static_cast<uint32>(Allocation->mFirstIndex) + FaceIndex };
@@ -484,12 +305,12 @@ const FShadowMapRenderParameters* FShadowRenderer::GetShadowMapRenderParameters(
 
 int32 FShadowRenderer::GetShadowMapIndex(const ULightComponent* LightComponent) const {
 	const FShadowMapAllocation* Allocation{ mShadowMapAllocations.Find(LightComponent) };
-	return mShadowMapReady && Allocation ? Allocation->mFirstIndex : InvalidShadowMapIndex;
+	return GetShadowDepthTexture() && Allocation ? Allocation->mFirstIndex : InvalidShadowMapIndex;
 }
 
 uint32 FShadowRenderer::GetShadowMapViewCount(const ULightComponent* LightComponent) const {
 	const FShadowMapAllocation* Allocation{ mShadowMapAllocations.Find(LightComponent) };
-	return mShadowMapReady && Allocation ? Allocation->mViewCount : 0;
+	return GetShadowDepthTexture() && Allocation ? Allocation->mViewCount : 0;
 }
 
 void FShadowRenderer::RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex) {
@@ -530,7 +351,8 @@ bool FShadowRenderer::InitializePreviewPass() {
 void FShadowRenderer::RenderShadowPreview() {
 	// 뷰포트가 여러 개면 프레임마다 여러 번 호출된다. 요청을 유지해 두고 마지막으로 그린 뷰의 결과를 보여 준다.
 	const FShadowMapRenderParameters* Parameters{ mPreviewLight ? GetShadowMapRenderParameters(mPreviewLight, mPreviewFace) : nullptr };
-	if (!Parameters || !mDepthTexture || !InitializePreviewPass()) {
+	const TSharedPtr<FTexture2DArray> DepthTexture{ mDepthTexture.lock() };
+	if (!Parameters || !DepthTexture || !InitializePreviewPass()) {
 		return;
 	}
 
@@ -554,7 +376,7 @@ void FShadowRenderer::RenderShadowPreview() {
 	RenderCommand::SetDepthStencilState(EDepthStencilState::Disabled);
 	RenderCommand::UpdateBufferData(mPreviewCB.get(), &Constants);
 	RenderCommand::BindConstantBuffer(0, mPreviewCB.get(), EShaderBindFlagBits::Pixel);
-	RenderCommand::BindShaderResource(0, mDepthTexture.get(), EShaderBindFlagBits::Pixel);
+	RenderCommand::BindShaderResource(0, DepthTexture.get(), EShaderBindFlagBits::Pixel);
 	RenderCommand::Draw(3);
 	// 다음 프레임에 아틀라스를 DSV로 쓸 때 SRV로 남아 있지 않도록 바로 해제한다.
 	RenderCommand::UnbindShaderResource(0, EShaderBindFlagBits::Pixel);
@@ -689,7 +511,7 @@ void FShadowRenderer::GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue,
 }
 
 FShadowMapRenderParameters FShadowRenderer::BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const {
-	const FTexture2D* DepthTexture{ mDepthTexture.get() };
+	const TSharedPtr<FTexture2DArray> DepthTexture{ mDepthTexture.lock() };
 	FShadowMapRenderParameters Parameters{};
 	if (!DepthTexture || !DepthTexture->GetSRV() || !DepthTexture->GetDSV() || Tile.mResolution == 0 || Tile.mResolution > DepthTexture->GetWidth() || Tile.mResolution > DepthTexture->GetHeight() || Tile.mX > DepthTexture->GetWidth() - Tile.mResolution || Tile.mY > DepthTexture->GetHeight() - Tile.mResolution) {
 		return Parameters;

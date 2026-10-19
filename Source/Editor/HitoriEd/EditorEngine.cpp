@@ -580,7 +580,7 @@ void UEditorEngine::RenderOpaquePass(const int32 ViewIndex, const FRenderingInfo
 		Renderer->RenderQueueSorting(RenderQueue, ViewProjection, ViewCameraLocation);
 
 		// 2.5D는 타일의 실제 깊이가 필요하므로 불투명 깊이를 먼저 채운 뒤 컬링한다.
-		FTexture2D* DepthTexture = ViewRenderingInfo.DepthStencil.Texture;
+		FTexture* DepthTexture = ViewRenderingInfo.DepthStencil.Texture;
 		const bool bDepthPrepass = Renderer->GetLightCullingMode() == ELightCullingMode::Tiled25D && DepthTexture;
 		if (bDepthPrepass)
 		{
@@ -817,7 +817,7 @@ void UEditorEngine::RenderOverlayPass(const int32 ViewIndex, UWorld& ViewWorld, 
 
 void UEditorEngine::RenderFXAAPass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo)
 {
-	FTexture2D* SceneColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
+	FTexture* SceneColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
 	FTexture2D* FxaaTarget = GetFxaaTargetForView(ViewIndex);   // 뷰별 임시 텍스처
 	if (!SceneColor || !FxaaTarget)
 		return;
@@ -845,7 +845,7 @@ void UEditorEngine::RenderFXAAPass(const int32 ViewIndex, const FRenderingInfo& 
 
 void UEditorEngine::RenderToneMapPass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo)
 {
-	FTexture2D* LDRColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
+	FTexture* LDRColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
 	FTexture2D* HDRColor = GetHDRTargetForView(ViewIndex);   // 뷰별 임시 텍스처
 	if (!LDRColor || !HDRColor)
 		return;
@@ -1197,7 +1197,7 @@ void UEditorEngine::CopyPIEWindowToBackbuffer()
 
 	// 백버퍼는 SRV가 없어 FXAA·Fog 입력으로 쓸 수 없으므로 오프스크린 결과를 통째로 복사한다.
 	// 창 크기 변경 직후 한 프레임은 크기가 어긋날 수 있어 그때는 건너뛴다.
-	FTexture2D* Backbuffer = BackbufferInfo.ColorRenderTargets[0].Texture;
+	FTexture* Backbuffer = BackbufferInfo.ColorRenderTargets[0].Texture;
 	if (!Backbuffer || !PIEColorTarget ||
 		BackbufferInfo.ViewportSetting.Width != PIETargetWidth ||
 		BackbufferInfo.ViewportSetting.Height != PIETargetHeight)

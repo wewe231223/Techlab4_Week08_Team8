@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Render/Texture2D.h"
+
 #include "Editor/EditorUI/EditorPanel.h"
 #include "Editor/LevelEditor/MultipleViewports/Adapter/MultipleViewportsAdapterTypes.h"
 #include "Render/RenderingInfo.h"

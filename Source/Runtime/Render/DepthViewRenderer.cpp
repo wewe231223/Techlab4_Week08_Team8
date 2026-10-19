@@ -23,7 +23,7 @@ bool FDepthViewRenderer::Init()
 	return true;
 }
 
-void FDepthViewRenderer::OnRender(FTexture2D* depthTexture, const FMatrix& ViewProjection, const FVector& CameraPosition, const FVector& ViewCameraForward)
+void FDepthViewRenderer::OnRender(FTexture* depthTexture, const FMatrix& ViewProjection, const FVector& CameraPosition, const FVector& ViewCameraForward)
 {
 	FDepthViewConstants Constants;
 	Constants.InverseViewProjection = ViewProjection.Inverse();

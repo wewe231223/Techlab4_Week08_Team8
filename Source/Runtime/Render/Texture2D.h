@@ -10,8 +10,7 @@ class FTexture2D : public FTexture
 {
 public:
 	// RowPitch가 0이면 InDesc.Format에서 계산한다.
-	// bArrayView가 true면 ArraySize가 1이어도 SRV/DSV를 Texture2DArray 뷰로 만든다. 셰이더가 Texture2DArray로 읽는 텍스처에 쓴다.
-	FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const void* InitialData, uint32 RowPitch = 0, bool bArrayView = false);
+	FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const void* InitialData, uint32 RowPitch = 0);
 	// 로더가 포맷과 픽치까지 알고 있으므로 그대로 받는다.
 	FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const FImageData& Image);
 	// For Swapchain
@@ -19,7 +18,7 @@ public:
 	~FTexture2D() = default;
 
 private:
-	void CreateViews(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, bool bArrayView = false);
+	void CreateViews(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc);
 };
 
 class UTexture2D : public URenderAsset

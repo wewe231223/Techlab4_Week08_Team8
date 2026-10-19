@@ -23,7 +23,7 @@ public:
 	FDepthViewRenderer operator=(const FDepthViewRenderer&) = delete;
 
 	bool Init();
-	void OnRender(FTexture2D* depthTexture, const FMatrix& ViewProjection, const FVector& CameraPosition, const FVector& ViewCameraForward);
+	void OnRender(FTexture* depthTexture, const FMatrix& ViewProjection, const FVector& CameraPosition, const FVector& ViewCameraForward);
 private:
 	FPipelineState PipelineState;
 	FShaderProgram* Shader = nullptr;

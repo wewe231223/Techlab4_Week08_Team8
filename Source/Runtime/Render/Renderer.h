@@ -236,7 +236,7 @@ public:
 	EViewMode GetViewMode() const { return CurrentViewMode; }
 
 	// DepthTexture는 Tiled25D에서만 쓴다. 이때는 DSV에서 풀린 상태(RenderDepth 뒤 EndRenderPass)여야 한다.
-	void CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture2D* DepthTexture = nullptr);
+	void CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture* DepthTexture = nullptr);
 
 	// public
 	void SetLightDebugMode(uint32 Mode);

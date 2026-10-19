@@ -2,7 +2,7 @@
 
 #include "Core/Types.h"
 #include "Math/Vector4.h"
-#include "Texture2D.h"
+#include "Texture.h"
 #include "Containers/Array.h"
 
 enum class ERenderTargetLoadOp
@@ -37,7 +37,7 @@ struct FClearValue
 
 struct FRenderingDesc
 {
-	FTexture2D* Texture = nullptr;
+	FTexture* Texture = nullptr;
 	ERenderTargetLoadOp  LoadOp = ERenderTargetLoadOp::Clear;
 	ERenderTargetStoreOp StoreOp = ERenderTargetStoreOp::Store;
 	FClearValue ClearValue = FClearValue();

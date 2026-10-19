@@ -110,6 +110,7 @@ void FScene::AddLight(ULightComponent* Component)
 void FScene::RemoveLight(ULightComponent* Component)
 {
 	if (!Component) return;
+	mShadowAtlas.Free(Component);
 
 	FLightSceneProxy* Proxy = Component->SceneProxy;
 	if (!Proxy)
@@ -149,6 +150,15 @@ void FScene::RemoveAllLights()
 	LocalLightProxies.Reset();
 	LocalLightParameters.Reset();
 	SkyLights.Reset();
+	mShadowAtlas.Reset();
+}
+
+FShadowAtlas& FScene::GetShadowAtlas() {
+	return mShadowAtlas;
+}
+
+void FScene::RequestShadowAtlasReallocation(const ULightComponent* LightComponent) {
+	mShadowAtlas.RequestReallocation(LightComponent);
 }
 
 // 등록된 라이트를 셰이더용 상수로 모아 Renderer에 올린다. 컴포넌트 값을 매 프레임 직접 읽으므로 별도 갱신 경로가 필요 없다.

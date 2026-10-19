@@ -3,6 +3,7 @@
 #include "Containers/Array.h"
 #include "Containers/Map.h"
 #include "RenderPacket.h"
+#include "ShadowAtlas.h"
 #include "ShadowView.h"
 
 #include <d3d11.h>
@@ -15,27 +16,18 @@ class FScene;
 class FShaderProgram;
 class FStructuredBuffer;
 class FTexture2D;
+class FTexture2DArray;
 class FPrimitiveSceneProxy;
 class ULightComponent;
 struct FBox;
 
 class FShadowRenderer {
 private:
+	using FShadowAtlasTile = FShadowAtlas::FTile;
+	using FShadowAtlasAllocation = FShadowAtlas::FAllocation;
 	using FShadowRasterizerState = Microsoft::WRL::ComPtr<ID3D11RasterizerState>;
 	using FShadowRasterizerStateKey = std::tuple<EShadowDepthBiasPreset, EShadowSlopeScaledDepthBiasPreset, bool>;
 	using FShadowRasterizerStateCache = std::map<FShadowRasterizerStateKey, FShadowRasterizerState>;
-
-	struct FShadowAtlasTile {
-		uint32 mX{};
-		uint32 mY{};
-		uint32 mResolution{};
-	};
-
-	struct FShadowAtlasAllocation {
-		FShadowAtlasTile mTiles[PointShadowFaceCount]{};
-		uint32 mViewCount{};
-		uint32 mPageIndex{};
-	};
 
 	struct FShadowMapAllocation {
 		int32 mFirstIndex{ InvalidShadowMapIndex };
@@ -55,7 +47,7 @@ public:
 	void BindShadowMaps();
 	void SetShadowPcfEnabled(bool Enabled);
 	bool IsShadowPcfEnabled() const;
-	FTexture2D* GetShadowDepthTexture() const;
+	FTexture2DArray* GetShadowDepthTexture() const;
 	uint32 GetShadowMapCount() const;
 	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
 	const FShadowMapRenderParameters* GetShadowMapRenderParameters(const ULightComponent* LightComponent, uint32 FaceIndex = 0) const;
@@ -70,13 +62,10 @@ private:
 	static bool IsValidShadowRequest(const FShadowMapRequest& Request);
 	static bool IsShadowCaster(const FPrimitiveSceneProxy* Proxy);
 	static int32 NormalizeAtlasResolution(int32 Resolution);
-	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution, uint32& OutPageCount);
+	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(FShadowAtlas& Atlas, const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution);
 	static bool GatherShadowCasterBounds(const FScene& Scene, FBox& OutBounds);
 	static void GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
 	bool InitializeShadowPass();
-	bool InitializeAtlasResource(int32 Resolution, int32 PageCount);
-	// 이번에 쓰는 페이지 수를 기록하고, 아틀라스에 남겨 둘 페이지 수를 돌려준다. 0이면 아틀라스를 해제해도 된다.
-	uint32 UpdateAtlasPageUsage(uint32 UsedPageCount);
 	bool InitializeComparisonSampler();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
@@ -91,13 +80,11 @@ private:
 	static constexpr uint32 mTextureSlot{ 13 };
 	static constexpr uint32 mBufferSlot{ 14 };
 	static constexpr uint32 mSamplerSlot{ 1 };
-	static constexpr int32 mMaxAtlasPageCount = 4;
+	static constexpr int32 mMaxAtlasPageCount{ 4 };
 
 	static constexpr uint32 mPreviewResolution{ 512 };
-	// 쓰지 않는 아틀라스 페이지를 해제하기까지 기다리는 그림자 렌더 횟수. 뷰포트마다 한 번씩 세므로 뷰포트가 많으면 더 빨리 해제된다.
-	static constexpr uint32 mAtlasPageIdleDelay{ 120 };
 
-	TUniquePtr<FTexture2D> mDepthTexture{};
+	TWeakPtr<FTexture2DArray> mDepthTexture{};
 
 	//Preview : LightComponent ShadowMap Preview
 	TUniquePtr<FTexture2D> mPreviewTexture{};
@@ -119,5 +106,4 @@ private:
 	TMap<const ULightComponent*, FShadowMapAllocation> mShadowMapAllocations{};
 	bool mShadowMapReady{};
 	bool mShadowPcfEnabled{};
-	uint32 mAtlasPageIdleCounts[mMaxAtlasPageCount]{}; // 페이지별로 연속해서 쓰이지 않은 그림자 렌더 횟수
 };

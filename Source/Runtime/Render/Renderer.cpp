@@ -638,7 +638,7 @@ void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<
 	RenderCommand::UpdateBufferData(GridLightingCB.get(), &GridConstants, sizeof(FLightGridConstants));
 }
 
-void FRenderer::CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture2D* DepthTexture)
+void FRenderer::CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture* DepthTexture)
 {
 	// 반투명(2.5D)과 컬링 전 경로가 쓰는 전체 순회용 b5. 디버그 모드만 반영한다.
 	FLightGridConstants FallbackConstants{};

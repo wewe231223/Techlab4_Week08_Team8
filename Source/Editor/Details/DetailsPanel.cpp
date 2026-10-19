@@ -21,6 +21,7 @@
 #include "Render/Material.h"
 #include "Render/ShadowRenderer.h"
 #include "Render/Texture2D.h"
+#include "Render/Texture2DArray.h"
 #include "Text/Font.h"
 #include "UObject/UObjectIterator.h"
 #include "GameFramework/Actor.h"
@@ -1008,7 +1009,7 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		return;
 	}
 
-	FTexture2D* Atlas{ mShadowRenderer ? mShadowRenderer->GetShadowDepthTexture() : nullptr };
+	FTexture2DArray* Atlas{ mShadowRenderer ? mShadowRenderer->GetShadowDepthTexture() : nullptr };
 	const uint32 ViewCount{ mShadowRenderer ? mShadowRenderer->GetShadowMapViewCount(LightComponent) : 0 };
 	if (!Atlas || !Atlas->GetSRV() || ViewCount == 0) {
 		ImGui::TextDisabled(LightComponent->CastsShadows() ? "Shadow map is not allocated in the last rendered view." : "Cast Shadows is disabled.");

@@ -3,6 +3,7 @@
 
 #include "Buffer.h"
 #include "Texture2D.h"
+#include "Texture2DArray.h"
 #include "TextureCube.h"
 #include "PipelineState.h"
 #include "DDSTextureLoader11.h"
@@ -206,11 +207,15 @@ TUniquePtr<FTexture2D> FRenderDevice::CreateTexture2D(const D3D11_TEXTURE2D_DESC
 	return MakeUnique<FTexture2D>(Device.Get(), Desc, Image);
 }
 
-TUniquePtr<FTexture2D> FRenderDevice::CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const void* InitialData, bool bArrayView)
+TUniquePtr<FTexture2D> FRenderDevice::CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const void* InitialData)
 {
-	TUniquePtr<FTexture2D> Texture = MakeUnique<FTexture2D>(Device.Get(), Desc, InitialData, 0u, bArrayView);
+	TUniquePtr<FTexture2D> Texture = MakeUnique<FTexture2D>(Device.Get(), Desc, InitialData, 0u);
 
 	return Texture;
+}
+
+TUniquePtr<FTexture2DArray> FRenderDevice::CreateTexture2DArray(const D3D11_TEXTURE2D_DESC& Desc, const D3D11_SUBRESOURCE_DATA* InitialData) {
+	return MakeUnique<FTexture2DArray>(Device.Get(), Desc, InitialData);
 }
 
 TUniquePtr<FTexture2D> FRenderDevice::LoadDDSTexture(const FString& Path) {

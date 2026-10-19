@@ -26,7 +26,7 @@ bool FFXAARenderer::Init()
     return true;
 }
 
-void FFXAARenderer::OnRender(FTexture2D* InputTexture)
+void FFXAARenderer::OnRender(FTexture* InputTexture)
 {
 	// 셰이더가 실제로 샘플링하는 텍스처 크기로 한 픽셀의 UV 크기를 구한다
 	const uint32 Width = InputTexture->GetWidth();
