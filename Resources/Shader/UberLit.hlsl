@@ -122,7 +122,7 @@ cbuffer LightGrid : register(b5)
 StructuredBuffer<FLightRenderParameters> LocalLights : register(t10);
 // 셀마다 [개수][라이트 번호 x MAX_LIGHTS_PER_CELL] 형태로 CELL_STRIDE칸씩 이어져 있다.
 StructuredBuffer<uint> CellLightIndices : register(t12);
-Texture2D<float> ShadowAtlas : register(t13);
+Texture2DArray<float> ShadowAtlas : register(t13);
 StructuredBuffer<FShadowMapRenderParameters> ShadowMaps : register(t14);
 StructuredBuffer<FDirectionalLightInfo> DirectionalLights : register(t15);
 SamplerComparisonState ShadowSampler : register(s1);
@@ -168,7 +168,7 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     }
 
     const FShadowMapRenderParameters Parameters = { ShadowMaps[ShadowIndex] };
-    if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f)) {
+    if (Parameters.mTextureIndex != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f)) {
         return 1.0f;
     }
 
@@ -191,17 +191,17 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
         [unroll]
         for (int X = { -1 }; X <= 1; ++X) {
             const float2 AtlasUv = { GetShadowAtlasUv(ShadowUv + float2(X, Y) * ShadowTexelSize, Parameters) };
-            Visibility += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ComparisonDepth);
+            Visibility += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, float3(AtlasUv, Parameters.mArraySlice), ComparisonDepth);
         }
     }
     return Visibility / 9.0f;
 #else
-    return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, GetShadowAtlasUv(ShadowUv, Parameters), ComparisonDepth);
+    return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, float3(GetShadowAtlasUv(ShadowUv, Parameters), Parameters.mArraySlice), ComparisonDepth);
 #endif
 }
 
 float SamplePointShadow(FShadowMapRenderParameters Parameters, float4 LightClip) {
-    if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f) || LightClip.w <= 0.0f) {
+    if (Parameters.mTextureIndex != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f) || LightClip.w <= 0.0f) {
         return 1.0f;
     }
     const float3 ShadowNdc = { LightClip.xyz / LightClip.w };
@@ -210,7 +210,7 @@ float SamplePointShadow(FShadowMapRenderParameters Parameters, float4 LightClip)
     }
     const float2 ShadowUv = { ShadowNdc.xy * float2(0.5f, -0.5f) + 0.5f };
     const float2 AtlasUv = { GetShadowAtlasUv(ShadowUv, Parameters) };
-    return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ShadowNdc.z);
+    return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, float3(AtlasUv, Parameters.mArraySlice), ShadowNdc.z);
 }
 
 float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal) {

@@ -74,10 +74,10 @@ TUniquePtr<FStructuredBuffer> RenderCommand::CreateRWStructuredBuffer(uint32 Str
 	return RenderDevice->CreateRWStructuredBuffer(Stride, Count);
 }
 
-TUniquePtr<FTexture2D> RenderCommand::CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const void* InitialData)
+TUniquePtr<FTexture2D> RenderCommand::CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const void* InitialData, bool bArrayView)
 {
 	assert(RenderDevice);
-	return RenderDevice->CreateTexture2D(Desc, InitialData);
+	return RenderDevice->CreateTexture2D(Desc, InitialData, bArrayView);
 }
 
 TUniquePtr<FTexture2D> RenderCommand::LoadDDSTexture(const FString& Path) {
@@ -254,10 +254,10 @@ void RenderCommand::BeginRenderPass(const FRenderingInfo& RenderingInfo)
 	if (RenderingInfo.DepthStencil.Texture != nullptr)
 	{
 		FClearValue dsvClearValue = RenderingInfo.DepthStencil.ClearValue;
-		DSV = RenderingInfo.DepthStencil.Texture->GetDSV();
+		DSV = RenderingInfo.DepthStencil.Texture->GetDSV(RenderingInfo.DepthStencil.ArraySlice);
 		if (RenderingInfo.DepthStencil.LoadOp == ERenderTargetLoadOp::Clear)
 		{
-			RenderDevice->GetContext()->ClearDepthStencilView(RenderingInfo.DepthStencil.Texture->GetDSV(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, dsvClearValue.DepthClearValue, dsvClearValue.StencilClearValue);
+			RenderDevice->GetContext()->ClearDepthStencilView(RenderingInfo.DepthStencil.Texture->GetDSV(RenderingInfo.DepthStencil.ArraySlice), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, dsvClearValue.DepthClearValue, dsvClearValue.StencilClearValue);
 		}
 	}
 	RenderDevice->GetContext()->OMSetRenderTargets((uint32)RTVs.Num(), RTVs.GetData(), DSV);

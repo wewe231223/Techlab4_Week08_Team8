@@ -121,57 +121,121 @@ bool FShadowRenderer::IsValidShadowRequest(const FShadowMapRequest& Request) {
 	return true;
 }
 
-TArray<FShadowRenderer::FShadowAtlasAllocation> FShadowRenderer::BuildShadowAtlasAllocations(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution) {
+TArray<FShadowRenderer::FShadowAtlasAllocation> FShadowRenderer::BuildShadowAtlasAllocations(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution, uint32 &OutPageCount) {
+
 	TArray<FShadowAtlasAllocation> Allocations{};
 	Allocations.SetNum(Requests.Num());
+
+
 	TArray<uint32> SortedIndices{};
 	for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
 		if (IsValidShadowRequest(Requests[Index])) {
 			SortedIndices.Add(Index);
 		}
 	}
+
 	std::sort(SortedIndices.begin(), SortedIndices.end(), [&Requests](uint32 Left, uint32 Right) {
 		const int32 LeftResolution{ NormalizeShadowMapResolution(Requests[Left].mSettings.mResolution) };
 		const int32 RightResolution{ NormalizeShadowMapResolution(Requests[Right].mSettings.mResolution) };
 		return LeftResolution != RightResolution ? LeftResolution > RightResolution : Left < Right;
 	});
 
+
 	constexpr int32 LevelCount{ static_cast<int32>(std::bit_width(static_cast<uint32>(mMaxAtlasResolution / MinShadowMapResolution))) };
-	TArray<FShadowAtlasTile> FreeTilesByLevel[LevelCount]{};
-	FreeTilesByLevel[0].Add(FShadowAtlasTile{ 0, 0, AtlasResolution });
+
+	//FFreeTiles = 아틀라스 텍스쳐
+	using FFreeTiles = std::array<TArray<FShadowAtlasTile>, LevelCount>;
+	TArray<FFreeTiles> Pages;
+
+	//첫 페이지 추가
+	FFreeTiles& FirstPage{ Pages.AddDefaulted_GetRef() };
+
+	// 0번째 페이지의 0레벨 초기화
+	Pages[0][0].Add(FShadowAtlasTile{0, 0, AtlasResolution});
+
+	// 남은 빈 공간을 TargetLevel 크기 타일 개수로 환산한다.
+	// 한 레벨 내려갈 때마다 4개로 쪼개지므로 레벨 L의 빈 타일 하나는 4^(TargetLevel - L)개에 해당한다.
+	auto CountAvailable = [](const FFreeTiles& Atlas, const int32 TargetLevel)
+	{
+		uint32 AvailableTileCount = 0;
+
+		for (int32 Level{}; Level <= TargetLevel; ++Level)
+			AvailableTileCount += Atlas[Level].Num() * (1u << (2 * (TargetLevel - Level)));
+
+		return AvailableTileCount;
+	};
+
 	for (uint32 Index : SortedIndices) {
+
+		// 요청 해상도를 2의 거듭제곱으로 맞춘다. 아틀라스보다 크면 들어갈 수 없으므로 건너뛴다.
 		const uint32 Resolution{ static_cast<uint32>(NormalizeShadowMapResolution(Requests[Index].mSettings.mResolution)) };
 		if (Resolution > AtlasResolution) {
 			continue;
 		}
+
+		// 이 해상도의 타일이 놓일 레벨. 둘 다 2의 거듭제곱이므로 log2(AtlasResolution / Resolution)와 같다.
 		const int32 TargetLevel{ static_cast<int32>(std::countr_zero(AtlasResolution / Resolution)) };
-		uint32 AvailableTileCount{};
-		for (int32 Level{}; Level <= TargetLevel; ++Level) {
-			AvailableTileCount += FreeTilesByLevel[Level].Num() * (1u << (2 * (TargetLevel - Level)));
-		}
-		if (AvailableTileCount < Requests[Index].mViewCount) {
+		if (TargetLevel < 0 || TargetLevel >= LevelCount)
+		{
 			continue;
 		}
 
+		//첫 페이지부터 읽을 수 있는지 확인
+		int32 PageIndex = -1;
+		for (int32 P = 0; P < Pages.Num(); ++P)
+		{
+			if (CountAvailable(Pages[P], TargetLevel) >= Requests[Index].mViewCount)
+			{
+				PageIndex = P;
+				break;
+			}
+		}
+
+		//어느 페이지에도 할당할 수 없다면 어떻게 처리해야 할까 -> Pages를 하나 늘려서 거기다 저장
+		if (PageIndex == -1)
+		{
+			if (Pages.Num() >= mMaxAtlasPageCount)
+			{
+				continue;
+			}
+			FFreeTiles& NewPage{ Pages.AddDefaulted_GetRef() };
+			NewPage[0].Add(FShadowAtlasTile{ 0, 0, AtlasResolution });
+			PageIndex = Pages.Num() - 1;
+		}
+
+		FFreeTiles& Atlas = Pages[PageIndex];
+
 		FShadowAtlasAllocation& Allocation{ Allocations[Index] };
 		Allocation.mViewCount = Requests[Index].mViewCount;
+		Allocation.mPageIndex = PageIndex;
 		for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
-			int32 AvailableLevel{ TargetLevel };
-			while (FreeTilesByLevel[AvailableLevel].IsEmpty()) {
+
+
+			// TargetLevel부터 위(더 큰 타일) 방향으로 올라가며 빈 타일이 있는 가장 작은 레벨을 찾는다.
+			// 위의 개수 확인을 통과했으므로 레벨 0을 넘어가기 전에 반드시 찾는다.
+			int32 AvailableLevel =  TargetLevel;
+			while (AvailableLevel > 0 && Atlas[AvailableLevel].IsEmpty()) {
 				--AvailableLevel;
 			}
-			FShadowAtlasTile Tile{ FreeTilesByLevel[AvailableLevel].Last() };
-			FreeTilesByLevel[AvailableLevel].RemoveLast();
+			// 가장 최근에 추가된 타일을 꺼낸다. 방금 쪼갠 타일의 형제부터 쓰게 되어 배치가 한쪽으로 모인다.
+			FShadowAtlasTile Tile{ Atlas[AvailableLevel].Last() };
+			Atlas[AvailableLevel].RemoveLast();
+
+			// 꺼낸 타일이 필요한 크기보다 크면 TargetLevel이 될 때까지 4등분한다.
+			// 왼쪽 위 사분면은 계속 쪼갤 타일로 남기고, 나머지 세 사분면은 한 단계 아래 레벨의 빈 타일로 돌려준다.
 			while (AvailableLevel < TargetLevel) {
 				Tile.mResolution /= 2;
 				++AvailableLevel;
-				FreeTilesByLevel[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY, Tile.mResolution });
-				FreeTilesByLevel[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX, Tile.mY + Tile.mResolution, Tile.mResolution });
-				FreeTilesByLevel[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY + Tile.mResolution, Tile.mResolution });
+				Atlas[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY, Tile.mResolution }); // 오른쪽 위
+				Atlas[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX, Tile.mY + Tile.mResolution, Tile.mResolution }); // 왼쪽 아래
+				Atlas[AvailableLevel].Add(FShadowAtlasTile{ Tile.mX + Tile.mResolution, Tile.mY + Tile.mResolution, Tile.mResolution }); // 오른쪽 아래
 			}
+			// 남은 왼쪽 위 사분면이 정확히 요청 크기이므로 이 면에 할당한다.
 			Allocation.mTiles[FaceIndex] = Tile;
 		}
 	}
+
+	OutPageCount = Pages.Num();
 	return Allocations;
 }
 
@@ -181,9 +245,15 @@ int32 FShadowRenderer::NormalizeAtlasResolution(int32 Resolution) {
 	return static_cast<int32>(std::bit_ceil(Size));
 }
 
-bool FShadowRenderer::InitializeAtlasResource(int32 Resolution) {
+bool FShadowRenderer::InitializeAtlasResource(int32 Resolution, int32 PageCount) {
 	const uint32 Size{ static_cast<uint32>(NormalizeAtlasResolution(Resolution)) };
-	if (mDepthTexture && mDepthTexture->GetRawPtr() && mDepthTexture->GetSRV() && mDepthTexture->GetDSV() && mDepthTexture->GetWidth() == Size && mDepthTexture->GetHeight() == Size) {
+	if (mDepthTexture && mDepthTexture->GetRawPtr()
+		&& mDepthTexture->GetSRV()
+		&& mDepthTexture->GetDSV()
+		&& mDepthTexture->GetWidth() == Size 
+		&& mDepthTexture->GetHeight() == Size
+		&& mDepthTexture->GetArraySize() >= static_cast<uint32>(PageCount)) {
+		// 페이지 수가 줄어든 경우에는 남는 층을 쓰지 않을 뿐이므로 다시 만들지 않는다. 늘어날 때만 다시 만든다.
 		return true;
 	}
 
@@ -191,12 +261,14 @@ bool FShadowRenderer::InitializeAtlasResource(int32 Resolution) {
 	Desc.Width = Size;
 	Desc.Height = Size;
 	Desc.MipLevels = 1;
-	Desc.ArraySize = 1;
+	Desc.ArraySize = PageCount;
 	Desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	Desc.SampleDesc.Count = 1;
 	Desc.Usage = D3D11_USAGE_DEFAULT;
 	Desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
-	TUniquePtr<FTexture2D> DepthTexture{ RenderCommand::CreateTexture2D(Desc) };
+
+	// 페이지가 1장이어도 셰이더는 Texture2DArray로 읽으므로 배열 뷰로 만든다.
+	TUniquePtr<FTexture2D> DepthTexture{ RenderCommand::CreateTexture2D(Desc, nullptr, true) };
 	if (!DepthTexture || !DepthTexture->GetRawPtr() || !DepthTexture->GetDSV() || !DepthTexture->GetSRV()) {
 		return false;
 	}
@@ -227,12 +299,15 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
 	const uint32 Size{ static_cast<uint32>(NormalizeAtlasResolution(AtlasResolution)) };
-	const TArray<FShadowAtlasAllocation> Allocations{ BuildShadowAtlasAllocations(Requests, Size) };
+
+	uint32 PageCount = 0;
+	const TArray<FShadowAtlasAllocation> Allocations{ BuildShadowAtlasAllocations(Requests, Size, PageCount) };
+
 	uint32 ParameterCount{};
 	for (const FShadowAtlasAllocation& Allocation : Allocations) {
 		ParameterCount += Allocation.mViewCount;
 	}
-	if (ParameterCount == 0 || !InitializeShadowPass() || !InitializeAtlasResource(static_cast<int32>(Size))) {
+	if (ParameterCount == 0 || !InitializeShadowPass() || !InitializeAtlasResource(static_cast<int32>(Size), PageCount)) {
 		return false;
 	}
 	if (!mShadowMapBuffer || mShadowMapBuffer->GetMaxCount() < ParameterCount) {
@@ -245,37 +320,52 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 
 	FTexture2D* DepthTexture{ mDepthTexture.get() };
 	RenderCommand::UnbindShaderResource(mTextureSlot, EShaderBindFlagBits::Vertex | EShaderBindFlagBits::Pixel | EShaderBindFlagBits::Compute);
+	
 	FRenderingInfo PassInfo{};
 	PassInfo.DepthStencil.Texture = DepthTexture;
 	PassInfo.ViewportSetting.Width = DepthTexture->GetWidth();
 	PassInfo.ViewportSetting.Height = DepthTexture->GetHeight();
-	RenderCommand::BeginRenderPass(PassInfo);
-	RenderCommand::BindShaderProgram(mShadowShader);
-	RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	RenderCommand::SetBlendState(EBlendState::Opaque);
-	RenderCommand::SetDepthStencilState(EDepthStencilState::Default);
-	RenderCommand::BindConstantBuffer(0, mShadowViewCB.get(), EShaderBindFlagBits::Vertex);
-	RenderCommand::BindConstantBuffer(2, mShadowObjectCB.get(), EShaderBindFlagBits::Vertex);
-	for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
-		const FShadowAtlasAllocation& Allocation{ Allocations[Index] };
-		const FShadowMapRequest& Request{ Requests[Index] };
-		if (Allocation.mViewCount == 0 || !SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset, Request.mViews[0].mCullBackFaces)) {
-			continue;
+
+	for (uint32 PageIndex = 0; PageIndex < PageCount; ++PageIndex)
+	{
+
+		PassInfo.DepthStencil.ArraySlice = PageIndex;
+		RenderCommand::BeginRenderPass(PassInfo);
+		RenderCommand::BindShaderProgram(mShadowShader);
+		RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		RenderCommand::SetBlendState(EBlendState::Opaque);
+		RenderCommand::SetDepthStencilState(EDepthStencilState::Default);
+		RenderCommand::BindConstantBuffer(0, mShadowViewCB.get(), EShaderBindFlagBits::Vertex);
+		RenderCommand::BindConstantBuffer(2, mShadowObjectCB.get(), EShaderBindFlagBits::Vertex);
+
+		for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index)
+		{
+			const FShadowAtlasAllocation& Allocation{ Allocations[Index] };
+			const FShadowMapRequest& Request{ Requests[Index] };
+			if (Allocation.mViewCount == 0 ||
+				Allocation.mPageIndex != PageIndex ||
+				!SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset, Request.mViews[0].mCullBackFaces)) {
+				continue;
+			}
+
+			const int32 FirstIndex{ static_cast<int32>(mShadowMapRenderParameters.Num()) };
+			for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
+				const FShadowAtlasTile& Tile{ Allocation.mTiles[FaceIndex] };
+				DrawShadowCasters(Scene, Request.mViews[FaceIndex], Tile);
+				FShadowMapRenderParameters Parameters{ BuildShadowMapRenderParameters(Request.mViews[FaceIndex], Request.mSettings, Tile) };
+				Parameters.mTextureIndex = 0;
+				Parameters.mArraySlice = PageIndex;
+				mShadowMapRenderParameters.Add(Parameters);
+			}
+			if (Request.mLightComponent) {
+				mShadowMapAllocations.Add(Request.mLightComponent, FShadowMapAllocation{ FirstIndex, Allocation.mViewCount });
+			}
+			mShadowMapReady = true;
 		}
-		const int32 FirstIndex{ static_cast<int32>(mShadowMapRenderParameters.Num()) };
-		for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
-			const FShadowAtlasTile& Tile{ Allocation.mTiles[FaceIndex] };
-			DrawShadowCasters(Scene, Request.mViews[FaceIndex], Tile);
-			FShadowMapRenderParameters Parameters{ BuildShadowMapRenderParameters(Request.mViews[FaceIndex], Request.mSettings, Tile) };
-			Parameters.mTextureIndex = 0;
-			mShadowMapRenderParameters.Add(Parameters);
-		}
-		if (Request.mLightComponent) {
-			mShadowMapAllocations.Add(Request.mLightComponent, FShadowMapAllocation{ FirstIndex, Allocation.mViewCount });
-		}
-		mShadowMapReady = true;
+
+		RenderCommand::EndRenderPass(PassInfo);
 	}
-	RenderCommand::EndRenderPass(PassInfo);
+
 	if (mShadowMapReady) {
 		RenderCommand::UpdateBufferData(mShadowMapBuffer.get(), mShadowMapRenderParameters.GetData(), mShadowMapRenderParameters.Num() * sizeof(FShadowMapRenderParameters));
 	}

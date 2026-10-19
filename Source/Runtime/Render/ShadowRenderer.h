@@ -34,6 +34,7 @@ private:
 	struct FShadowAtlasAllocation {
 		FShadowAtlasTile mTiles[PointShadowFaceCount]{};
 		uint32 mViewCount{};
+		uint32 mPageIndex{};
 	};
 
 	struct FShadowMapAllocation {
@@ -66,11 +67,11 @@ private:
 	static bool IsValidShadowRequest(const FShadowMapRequest& Request);
 	static bool IsShadowCaster(const FPrimitiveSceneProxy* Proxy);
 	static int32 NormalizeAtlasResolution(int32 Resolution);
-	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution);
+	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution, uint32& OutPageCount);
 	static bool GatherShadowCasterBounds(const FScene& Scene, FBox& OutBounds);
 	static void GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
 	bool InitializeShadowPass();
-	bool InitializeAtlasResource(int32 Resolution);
+	bool InitializeAtlasResource(int32 Resolution, int32 PageCount);
 	bool InitializeComparisonSampler();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
@@ -78,11 +79,13 @@ private:
 	FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const;
 
 private:
-	static constexpr int32 mDefaultAtlasResolution{ 8192 };
+	static constexpr int32 mDefaultAtlasResolution{ 4096 };
 	static constexpr int32 mMaxAtlasResolution{ 8192 };
 	static constexpr uint32 mTextureSlot{ 13 };
 	static constexpr uint32 mBufferSlot{ 14 };
 	static constexpr uint32 mSamplerSlot{ 1 };
+	static constexpr int32 mMaxAtlasPageCount = 4;
+
 	TUniquePtr<FTexture2D> mDepthTexture{};
 	TUniquePtr<FStructuredBuffer> mShadowMapBuffer{};
 	TUniquePtr<FConstantBuffer> mShadowViewCB{};
