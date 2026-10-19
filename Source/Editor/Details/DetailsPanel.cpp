@@ -937,6 +937,11 @@ void FDetailsPanel::OnRender()
 {
 	ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
 
+	// 그림자 맵 미리보기는 DrawShadowMap이 그려질 때만 다시 요청한다. 라이트 선택이 풀리면 미리보기 패스도 멈춘다.
+	if (mShadowRenderer) {
+		mShadowRenderer->RequestShadowPreview(nullptr, 0);
+	}
+
 	ImGui::Begin("Details");
 
 	if (TargetActor)
@@ -1020,15 +1025,27 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		return;
 	}
 
+	// 아틀라스는 Texture2DArray라 ImGui가 직접 읽을 수 없다. 그림자 렌더러가 다음 프레임에 이 타일을 2D 미리보기 텍스처로 그린다.
+	mShadowRenderer->RequestShadowPreview(LightComponent, FaceIndex);
+
 	const FVector4& UvScaleBias{ Parameters->mUvScaleBias };
-	const ImVec2 UvMin{ UvScaleBias.Z + Parameters->mTexelSize.X * 0.5f, UvScaleBias.W + Parameters->mTexelSize.Y * 0.5f };
-	const ImVec2 UvMax{ UvScaleBias.Z + UvScaleBias.X - Parameters->mTexelSize.X * 0.5f, UvScaleBias.W + UvScaleBias.Y - Parameters->mTexelSize.Y * 0.5f };
 	const uint32 Width{ static_cast<uint32>(Atlas->GetWidth() * UvScaleBias.X + 0.5f) };
 	const uint32 Height{ static_cast<uint32>(Atlas->GetHeight() * UvScaleBias.Y + 0.5f) };
 	ImGui::TextDisabled("Last rendered view");
-	ImGui::Text("%u x %u", Width, Height);
+	// 아틀라스에 자리가 부족하면 할당기가 해상도를 낮춘다. 요청값과 다를 때만 함께 보여 준다.
+	const uint32 RequestedResolution{ static_cast<uint32>(NormalizeShadowMapResolution(LightComponent->GetShadowSettings().mResolution)) };
+	if (RequestedResolution != Width) {
+		ImGui::Text("%u x %u (page %u, requested %u)", Width, Height, Parameters->mArraySlice, RequestedResolution);
+	} else {
+		ImGui::Text("%u x %u (page %u)", Width, Height, Parameters->mArraySlice);
+	}
 	const float Size{ std::clamp(ImGui::GetContentRegionAvail().x, 1.0f, 384.0f) };
-	ImGui::Image(reinterpret_cast<ImTextureID>(Atlas->GetSRV()), ImVec2{ Size, Size }, UvMin, UvMax);
+	FTexture2D* Preview{ mShadowRenderer->GetShadowPreviewTexture() };
+	if (Preview && Preview->GetSRV()) {
+		ImGui::Image(reinterpret_cast<ImTextureID>(Preview->GetSRV()), ImVec2{ Size, Size });
+	} else {
+		ImGui::Dummy(ImVec2{ Size, Size });
+	}
 }
 
 void FDetailsPanel::SelectComponent(UActorComponent* Component)

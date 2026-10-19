@@ -16,6 +16,17 @@
 #include <bit>
 #include <cmath>
 
+namespace {
+	// ShadowPreview.hlsl의 FShadowPreviewConstants와 같은 32바이트 배치.
+	struct FShadowPreviewConstants {
+		FVector2 mUvMin{};
+		FVector2 mUvMax{};
+		uint32 mSlice{};
+		uint32 mPadding[3]{};
+	};
+	static_assert(sizeof(FShadowPreviewConstants) == 32);
+}
+
 FShadowRenderer::FShadowRenderer() {
 }
 
@@ -32,6 +43,7 @@ void FShadowRenderer::Reset() {
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
 	mShadowMapReady = false;
+	mPreviewReady = false;
 }
 
 void FShadowRenderer::SetShadowPcfEnabled(bool Enabled) {
@@ -174,13 +186,28 @@ TArray<FShadowRenderer::FShadowAtlasAllocation> FShadowRenderer::BuildShadowAtla
 		}
 
 		// 이 해상도의 타일이 놓일 레벨. 둘 다 2의 거듭제곱이므로 log2(AtlasResolution / Resolution)와 같다.
-		const int32 TargetLevel{ static_cast<int32>(std::countr_zero(AtlasResolution / Resolution)) };
+		int32 TargetLevel{ static_cast<int32>(std::countr_zero(AtlasResolution / Resolution)) };
 		if (TargetLevel < 0 || TargetLevel >= LevelCount)
 		{
 			continue;
 		}
 
+		// 빈 페이지 한 장에 들어가는 타일 수는 4^TargetLevel이다. 이보다 면이 많으면 새 페이지를 열어도 들어가지 않으므로
+		// 해상도를 반씩 낮춰 한 페이지에 모든 면이 들어가게 한다. (예: 4096 아틀라스의 2048 포인트 라이트 6면 -> 1024)
+		// 여러 면을 쓰는 건 포인트 라이트뿐이고, 포인트 라이트 뷰는 해상도와 무관하므로 타일 크기만 줄이면 된다.
+		while ((1u << (2 * TargetLevel)) < Requests[Index].mViewCount
+			&& TargetLevel + 1 < LevelCount
+			&& (AtlasResolution >> (TargetLevel + 1)) >= static_cast<uint32>(MinShadowMapResolution))
+		{
+			++TargetLevel;
+		}
+		if ((1u << (2 * TargetLevel)) < Requests[Index].mViewCount)
+		{
+			continue;
+		}
+
 		//첫 페이지부터 읽을 수 있는지 확인
+
 		int32 PageIndex = -1;
 		for (int32 P = 0; P < Pages.Num(); ++P)
 		{
@@ -296,6 +323,7 @@ bool FShadowRenderer::InitializeShadowPass() {
 
 bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution) {
 	mShadowMapReady = false;
+	mPreviewReady = false;
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
 	const uint32 Size{ static_cast<uint32>(NormalizeAtlasResolution(AtlasResolution)) };
@@ -368,6 +396,7 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 
 	if (mShadowMapReady) {
 		RenderCommand::UpdateBufferData(mShadowMapBuffer.get(), mShadowMapRenderParameters.GetData(), mShadowMapRenderParameters.Num() * sizeof(FShadowMapRenderParameters));
+		RenderShadowPreview();
 	}
 	return mShadowMapReady;
 }
@@ -430,6 +459,76 @@ int32 FShadowRenderer::GetShadowMapIndex(const ULightComponent* LightComponent) 
 uint32 FShadowRenderer::GetShadowMapViewCount(const ULightComponent* LightComponent) const {
 	const FShadowMapAllocation* Allocation{ mShadowMapAllocations.Find(LightComponent) };
 	return mShadowMapReady && Allocation ? Allocation->mViewCount : 0;
+}
+
+void FShadowRenderer::RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex) {
+	mPreviewLight = LightComponent;
+	mPreviewFace = FaceIndex;
+}
+
+FTexture2D* FShadowRenderer::GetShadowPreviewTexture() const {
+	return mPreviewReady ? mPreviewTexture.get() : nullptr;
+}
+
+bool FShadowRenderer::InitializePreviewPass() {
+	if (!mPreviewShader) {
+		mPreviewShader = FRenderResourceManager::GetShaderProgram("Resources/Shader/ShadowPreview.hlsl");
+		if (!mPreviewShader || !mPreviewShader->PixelShader) {
+			mPreviewShader = nullptr;
+			return false;
+		}
+	}
+	if (!mPreviewCB || !mPreviewCB->GetBuffer()) {
+		mPreviewCB = RenderCommand::CreateConstantBuffer(sizeof(FShadowPreviewConstants));
+	}
+	if (!mPreviewTexture || !mPreviewTexture->GetRTV() || !mPreviewTexture->GetSRV()) {
+		D3D11_TEXTURE2D_DESC Desc{};
+		Desc.Width = mPreviewResolution;
+		Desc.Height = mPreviewResolution;
+		Desc.MipLevels = 1;
+		Desc.ArraySize = 1;
+		Desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		Desc.SampleDesc.Count = 1;
+		Desc.Usage = D3D11_USAGE_DEFAULT;
+		Desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+		mPreviewTexture = RenderCommand::CreateTexture2D(Desc);
+	}
+	return mPreviewCB && mPreviewCB->GetBuffer() && mPreviewTexture && mPreviewTexture->GetRTV() && mPreviewTexture->GetSRV();
+}
+
+void FShadowRenderer::RenderShadowPreview() {
+	// 뷰포트가 여러 개면 프레임마다 여러 번 호출된다. 요청을 유지해 두고 마지막으로 그린 뷰의 결과를 보여 준다.
+	const FShadowMapRenderParameters* Parameters{ mPreviewLight ? GetShadowMapRenderParameters(mPreviewLight, mPreviewFace) : nullptr };
+	if (!Parameters || !mDepthTexture || !InitializePreviewPass()) {
+		return;
+	}
+
+	// 타일 가장자리의 반 텍셀은 이웃 타일과 섞이지 않도록 제외한다.
+	FShadowPreviewConstants Constants{};
+	Constants.mUvMin = FVector2{ Parameters->mUvScaleBias.Z + Parameters->mTexelSize.X * 0.5f, Parameters->mUvScaleBias.W + Parameters->mTexelSize.Y * 0.5f };
+	Constants.mUvMax = FVector2{ Parameters->mUvScaleBias.Z + Parameters->mUvScaleBias.X - Parameters->mTexelSize.X * 0.5f, Parameters->mUvScaleBias.W + Parameters->mUvScaleBias.Y - Parameters->mTexelSize.Y * 0.5f };
+	Constants.mSlice = Parameters->mArraySlice;
+
+	FRenderingInfo PassInfo{};
+	FRenderingDesc& ColorTarget{ PassInfo.ColorRenderTargets.AddDefaulted_GetRef() };
+	ColorTarget.Texture = mPreviewTexture.get();
+	ColorTarget.ClearValue.ColorClearValue = { 0.0f, 0.0f, 0.0f, 1.0f };
+	PassInfo.ViewportSetting.Width = mPreviewResolution;
+	PassInfo.ViewportSetting.Height = mPreviewResolution;
+	RenderCommand::BeginRenderPass(PassInfo);
+	RenderCommand::BindShaderProgram(mPreviewShader);
+	RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	RenderCommand::SetRasterizerState(ERasterizerState::SolidBack);
+	RenderCommand::SetBlendState(EBlendState::Opaque);
+	RenderCommand::SetDepthStencilState(EDepthStencilState::Disabled);
+	RenderCommand::UpdateBufferData(mPreviewCB.get(), &Constants);
+	RenderCommand::BindConstantBuffer(0, mPreviewCB.get(), EShaderBindFlagBits::Pixel);
+	RenderCommand::BindShaderResource(0, mDepthTexture.get(), EShaderBindFlagBits::Pixel);
+	RenderCommand::Draw(3);
+	// 다음 프레임에 아틀라스를 DSV로 쓸 때 SRV로 남아 있지 않도록 바로 해제한다.
+	RenderCommand::UnbindShaderResource(0, EShaderBindFlagBits::Pixel);
+	RenderCommand::EndRenderPass(PassInfo);
+	mPreviewReady = true;
 }
 
 bool FShadowRenderer::IsShadowCaster(const FPrimitiveSceneProxy* Proxy) {
