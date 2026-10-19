@@ -6,6 +6,8 @@
 #include "ShadowView.h"
 
 #include <d3d11.h>
+#include <map>
+#include <tuple>
 #include <wrl/client.h>
 
 class FConstantBuffer;
@@ -19,6 +21,10 @@ struct FBox;
 
 class FShadowRenderer {
 private:
+	using FShadowRasterizerState = Microsoft::WRL::ComPtr<ID3D11RasterizerState>;
+	using FShadowRasterizerStateKey = std::tuple<EShadowDepthBiasPreset, EShadowSlopeScaledDepthBiasPreset, bool>;
+	using FShadowRasterizerStateCache = std::map<FShadowRasterizerStateKey, FShadowRasterizerState>;
+
 	struct FShadowAtlasTile {
 		uint32 mX{};
 		uint32 mY{};
@@ -66,7 +72,7 @@ private:
 	bool InitializeShadowPass();
 	bool InitializeAtlasResource(int32 Resolution);
 	bool InitializeComparisonSampler();
-	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset);
+	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
 	void DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile);
 	FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const;
@@ -82,7 +88,7 @@ private:
 	TUniquePtr<FConstantBuffer> mShadowViewCB{};
 	TUniquePtr<FConstantBuffer> mShadowObjectCB{};
 	Microsoft::WRL::ComPtr<ID3D11SamplerState> mComparisonSampler{};
-	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mShadowRasterizerStates[ShadowDepthBiasPresetCount][ShadowSlopeScaledDepthBiasPresetCount]{};
+	FShadowRasterizerStateCache mShadowRasterizerStates{};
 	FShaderProgram* mShadowShader{};
 	TArray<FShadowMapRequest> mShadowRequests{};
 	FRenderQueue mShadowRenderQueue{};

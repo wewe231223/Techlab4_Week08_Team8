@@ -1,10 +1,10 @@
 #include "EnginePCH.h"
 #include "ShadowView.h"
 #include "Math/Box.h"
+#include "Math/Transform.h"
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace {
 	bool IsFiniteShadowVector(const FVector& Value) {
@@ -21,34 +21,65 @@ namespace {
 		}
 		return true;
 	}
+
+	bool BuildShadowBasis(const FTransform& LightTransform, FVector& OutForward, FVector& OutRight, FVector& OutUp) {
+		const FQuat Orientation{ LightTransform.GetOrientation() };
+		OutForward = Orientation.RotateVector(FVector{ 1.0f, 0.0f, 0.0f });
+		OutRight = Orientation.RotateVector(FVector{ 0.0f, 1.0f, 0.0f });
+		OutUp = Orientation.RotateVector(FVector{ 0.0f, 0.0f, 1.0f });
+		return IsFiniteShadowVector(OutForward) && IsFiniteShadowVector(OutRight) && IsFiniteShadowVector(OutUp);
+	}
+
+	FMatrix BuildShadowViewMatrix(const FVector& Position, const FVector& Forward, const FVector& Right, const FVector& Up) {
+		return FMatrix{
+			Forward.X, Right.X, Up.X, 0.0f,
+			Forward.Y, Right.Y, Up.Y, 0.0f,
+			Forward.Z, Right.Z, Up.Z, 0.0f,
+			-FVector::Dot(Position, Forward), -FVector::Dot(Position, Right), -FVector::Dot(Position, Up), 1.0f
+		};
+	}
+
+	FMatrix BuildPerspectiveShadowProjection(float WidthScale, float HeightScale, float NearPlane, float FarPlane) {
+		const float DepthScale{ FarPlane / (FarPlane - NearPlane) };
+		return FMatrix{
+			0.0f, 0.0f, DepthScale, 1.0f,
+			WidthScale, 0.0f, 0.0f, 0.0f,
+			0.0f, HeightScale, 0.0f, 0.0f,
+			0.0f, 0.0f, -NearPlane * DepthScale, 0.0f
+		};
+	}
+
+	bool FinalizeShadowView(FShadowView& Result, const FVector& Position, float NearPlane, float FarPlane, FShadowView& OutView) {
+		if (!std::isfinite(NearPlane) || !std::isfinite(FarPlane) || NearPlane < 0.0f || FarPlane <= NearPlane) {
+			return false;
+		}
+		Result.mViewProjection = Result.mView * Result.mProjection;
+		if (!IsFiniteShadowMatrix(Result.mViewProjection)) {
+			return false;
+		}
+		Result.mWorldPosition = Position;
+		Result.mNearPlane = NearPlane;
+		OutView = Result;
+		return true;
+	}
 }
 
-bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView) {
-	if (!IsFiniteShadowVector(LightDirection) || !IsFiniteShadowVector(CasterBounds.Min) || !IsFiniteShadowVector(CasterBounds.Max) || CasterBounds.Min.X > CasterBounds.Max.X || CasterBounds.Min.Y > CasterBounds.Max.Y || CasterBounds.Min.Z > CasterBounds.Max.Z) {
+bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView) {
+	if (!IsFiniteShadowVector(CasterBounds.Min) || !IsFiniteShadowVector(CasterBounds.Max) || CasterBounds.Min.X > CasterBounds.Max.X || CasterBounds.Min.Y > CasterBounds.Max.Y || CasterBounds.Min.Z > CasterBounds.Max.Z) {
 		return false;
 	}
 
-	const float DirectionLengthSquared{ LightDirection.SizeSquared() };
-	if (!std::isfinite(DirectionLengthSquared) || DirectionLengthSquared < 1.0e-8f) {
+	FVector Forward{};
+	FVector Right{};
+	FVector Up{};
+	if (!BuildShadowBasis(LightTransform, Forward, Right, Up)) {
 		return false;
 	}
 
-	const FVector Forward{ LightDirection / std::sqrt(DirectionLengthSquared) };
-	const FVector ReferenceUp{ std::abs(Forward.Z) < 0.99f ? FVector{ 0.0f, 0.0f, 1.0f } : FVector{ 0.0f, 1.0f, 0.0f } };
-	const FVector Right{ FVector::Cross(ReferenceUp, Forward).GetSafeNormal() };
-	const FVector Up{ FVector::Cross(Forward, Right) };
 	const FVector Center{ CasterBounds.Min * 0.5f + CasterBounds.Max * 0.5f };
-	FVector Minimum{ std::numeric_limits<float>::max() };
-	FVector Maximum{ std::numeric_limits<float>::lowest() };
-	for (uint32 Index{}; Index < 8; ++Index) {
-		const FVector Corner{ Index & 1 ? CasterBounds.Max.X : CasterBounds.Min.X, Index & 2 ? CasterBounds.Max.Y : CasterBounds.Min.Y, Index & 4 ? CasterBounds.Max.Z : CasterBounds.Min.Z };
-		const FVector Offset{ Corner - Center };
-		const FVector LightPosition{ FVector::Dot(Offset, Forward), FVector::Dot(Offset, Right), FVector::Dot(Offset, Up) };
-		for (uint32 Axis{}; Axis < 3; ++Axis) {
-			Minimum[Axis] = std::min(Minimum[Axis], LightPosition[Axis]);
-			Maximum[Axis] = std::max(Maximum[Axis], LightPosition[Axis]);
-		}
-	}
+	const FVector Extent{ CasterBounds.Max * 0.5f - CasterBounds.Min * 0.5f };
+	const FVector Maximum{ FVector::Dot(Extent, Forward.GetAbs()), FVector::Dot(Extent, Right.GetAbs()), FVector::Dot(Extent, Up.GetAbs()) };
+	const FVector Minimum{ -Maximum };
 
 	const float BorderScale{ 1.0f + 2.0f / static_cast<float>(NormalizeShadowMapResolution(Resolution)) };
 	const float Width{ std::max(Maximum.Y - Minimum.Y, 0.01f) * BorderScale };
@@ -57,10 +88,8 @@ bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& Caste
 	constexpr float DepthPadding{ 0.01f };
 	const float FarPlane{ NearPlane + std::max(Maximum.X - Minimum.X, 0.01f) + DepthPadding * 2.0f };
 	const FVector Position{ Center + Forward * (Minimum.X - NearPlane - DepthPadding) + Right * ((Minimum.Y + Maximum.Y) * 0.5f) + Up * ((Minimum.Z + Maximum.Z) * 0.5f) };
-	const float ForwardOffset{ -FVector::Dot(Position, Forward) };
-	const float RightOffset{ -FVector::Dot(Position, Right) };
-	const float UpOffset{ -FVector::Dot(Position, Up) };
-	if (!std::isfinite(FarPlane) || !IsFiniteShadowVector(Position) || !std::isfinite(ForwardOffset) || !std::isfinite(RightOffset) || !std::isfinite(UpOffset)) {
+	const FMatrix View{ BuildShadowViewMatrix(Position, Forward, Right, Up) };
+	if (!std::isfinite(FarPlane) || !IsFiniteShadowVector(Position) || !IsFiniteShadowMatrix(View)) {
 		return false;
 	}
 
@@ -70,12 +99,6 @@ bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& Caste
 	if (!std::isfinite(WidthScale) || !std::isfinite(HeightScale) || std::min({ WidthScale, HeightScale, DepthScale }) <= 1.0e-6f) {
 		return false;
 	}
-	const FMatrix View{
-		Forward.X, Right.X, Up.X, 0.0f,
-		Forward.Y, Right.Y, Up.Y, 0.0f,
-		Forward.Z, Right.Z, Up.Z, 0.0f,
-		ForwardOffset, RightOffset, UpOffset, 1.0f
-	};
 	const FMatrix Projection{
 		0.0f, 0.0f, DepthScale, 0.0f,
 		WidthScale, 0.0f, 0.0f, 0.0f,
@@ -86,129 +109,96 @@ bool BuildDirectionalShadowView(const FVector& LightDirection, const FBox& Caste
 	FShadowView Result{};
 	Result.mView = View;
 	Result.mProjection = Projection;
-	Result.mViewProjection = View * Projection;
-	if (!IsFiniteShadowMatrix(Result.mViewProjection)) {
-		return false;
-	}
-	Result.mWorldPosition = Position;
-	Result.mNearPlane = NearPlane;
-	Result.mFarPlane = FarPlane;
-	OutView = Result;
-	return true;
+	return FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView);
 }
 
-bool BuildSpotShadowView(const FVector& LightPosition, const FVector& LightDirection, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView) {
-	if (!IsFiniteShadowVector(LightPosition) || !IsFiniteShadowVector(LightDirection) || !std::isfinite(OuterConeAngle) || OuterConeAngle <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
+bool BuildSpotShadowView(const FTransform& LightTransform, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView) {
+	const FVector& LightPosition{ LightTransform.Location };
+	if (!IsFiniteShadowVector(LightPosition) || !std::isfinite(OuterConeAngle) || OuterConeAngle <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
 		return false;
 	}
 
-	const float DirectionLengthSquared{ LightDirection.SizeSquared() };
-	if (!std::isfinite(DirectionLengthSquared) || DirectionLengthSquared < 1.0e-8f) {
+	FVector Forward{};
+	FVector Right{};
+	FVector Up{};
+	if (!BuildShadowBasis(LightTransform, Forward, Right, Up)) {
 		return false;
 	}
 
-	const FVector Forward{ LightDirection / std::sqrt(DirectionLengthSquared) };
-	const FVector ReferenceUp{ std::abs(Forward.Z) < 0.99f ? FVector{ 0.0f, 0.0f, 1.0f } : FVector{ 0.0f, 1.0f, 0.0f } };
-	const FVector Right{ FVector::Cross(ReferenceUp, Forward).GetSafeNormal() };
-	const FVector Up{ FVector::Cross(Forward, Right) };
 	const float SafeOuterAngle{ std::clamp(OuterConeAngle, 0.1f, 89.0f) };
 	const float NearPlane{ std::min(0.01f, AttenuationRadius * 0.01f) };
 	const float ProjectionScale{ 1.0f / std::tan(FMath::DegreesToRadians(SafeOuterAngle)) };
-	const float DepthScale{ AttenuationRadius / (AttenuationRadius - NearPlane) };
-	const FMatrix View{
-		Forward.X, Right.X, Up.X, 0.0f,
-		Forward.Y, Right.Y, Up.Y, 0.0f,
-		Forward.Z, Right.Z, Up.Z, 0.0f,
-		-FVector::Dot(LightPosition, Forward), -FVector::Dot(LightPosition, Right), -FVector::Dot(LightPosition, Up), 1.0f
-	};
-	const FMatrix Projection{
-		0.0f, 0.0f, DepthScale, 1.0f,
-		ProjectionScale, 0.0f, 0.0f, 0.0f,
-		0.0f, ProjectionScale, 0.0f, 0.0f,
-		0.0f, 0.0f, -NearPlane * DepthScale, 0.0f
-	};
+	if (NearPlane <= 0.0f) {
+		return false;
+	}
 
 	FShadowView Result{};
-	Result.mView = View;
-	Result.mProjection = Projection;
-	Result.mViewProjection = View * Projection;
-	if (NearPlane <= 0.0f || !IsFiniteShadowMatrix(Result.mViewProjection)) {
-		return false;
-	}
-	Result.mWorldPosition = LightPosition;
-	Result.mNearPlane = NearPlane;
-	Result.mFarPlane = AttenuationRadius;
+	Result.mView = BuildShadowViewMatrix(LightPosition, Forward, Right, Up);
+	Result.mProjection = BuildPerspectiveShadowProjection(ProjectionScale, ProjectionScale, NearPlane, AttenuationRadius);
 	Result.mIsOrthographic = false;
-	OutView = Result;
-	return true;
+	return FinalizeShadowView(Result, LightPosition, NearPlane, AttenuationRadius, OutView);
 }
 
-bool BuildRectShadowView(const FVector& LightPosition, const FVector& LightDirection, const FVector& LightRight, float HalfWidth, float HalfHeight, float AttenuationRadius, int32 Resolution, FShadowView& OutView) {
-	if (!IsFiniteShadowVector(LightPosition) || !IsFiniteShadowVector(LightDirection) || !IsFiniteShadowVector(LightRight) || !std::isfinite(HalfWidth) || HalfWidth <= 0.0f || !std::isfinite(HalfHeight) || HalfHeight <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
+bool BuildRectShadowView(const FTransform& LightTransform, float HalfWidth, float HalfHeight, float AttenuationRadius, FShadowView& OutView) {
+	const FVector& LightPosition{ LightTransform.Location };
+	if (!IsFiniteShadowVector(LightPosition) || !std::isfinite(HalfWidth) || HalfWidth <= 0.0f || !std::isfinite(HalfHeight) || HalfHeight <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
 		return false;
 	}
 
-	const float DirectionLengthSquared{ LightDirection.SizeSquared() };
-	if (!std::isfinite(DirectionLengthSquared) || DirectionLengthSquared < 1.0e-8f) {
+	FVector Forward{};
+	FVector Right{};
+	FVector Up{};
+	if (!BuildShadowBasis(LightTransform, Forward, Right, Up)) {
 		return false;
 	}
-	const FVector Forward{ LightDirection / std::sqrt(DirectionLengthSquared) };
-	const FVector RightAxis{ LightRight - Forward * FVector::Dot(LightRight, Forward) };
-	const float RightLengthSquared{ RightAxis.SizeSquared() };
-	if (!std::isfinite(RightLengthSquared) || RightLengthSquared < 1.0e-8f) {
-		return false;
-	}
-	const FVector Right{ RightAxis / std::sqrt(RightLengthSquared) };
-	const FVector Up{ FVector::Cross(Forward, Right) };
+
 	const float NearPlane{ std::max({ HalfWidth, HalfHeight, 0.01f }) };
 	const float FarPlane{ NearPlane + AttenuationRadius };
-	const float BorderScale{ 1.0f + 2.0f / static_cast<float>(NormalizeShadowMapResolution(Resolution)) };
-	const float ProjectionHalfWidth{ (HalfWidth + AttenuationRadius) * BorderScale };
-	const float ProjectionHalfHeight{ (HalfHeight + AttenuationRadius) * BorderScale };
 	const FVector Position{ LightPosition - Forward * NearPlane };
-	if (!std::isfinite(FarPlane) || FarPlane <= NearPlane || !std::isfinite(ProjectionHalfWidth) || !std::isfinite(ProjectionHalfHeight) || !IsFiniteShadowVector(Position)) {
+	if (!std::isfinite(FarPlane) || FarPlane <= NearPlane || !IsFiniteShadowVector(Position)) {
 		return false;
 	}
 
-	const float WidthScale{ NearPlane / ProjectionHalfWidth };
-	const float HeightScale{ NearPlane / ProjectionHalfHeight };
-	const float DepthScale{ FarPlane / (FarPlane - NearPlane) };
-	const FMatrix View{
-		Forward.X, Right.X, Up.X, 0.0f,
-		Forward.Y, Right.Y, Up.Y, 0.0f,
-		Forward.Z, Right.Z, Up.Z, 0.0f,
-		-FVector::Dot(Position, Forward), -FVector::Dot(Position, Right), -FVector::Dot(Position, Up), 1.0f
-	};
-	const FMatrix Projection{
-		0.0f, 0.0f, DepthScale, 1.0f,
-		WidthScale, 0.0f, 0.0f, 0.0f,
-		0.0f, HeightScale, 0.0f, 0.0f,
-		0.0f, 0.0f, -NearPlane * DepthScale, 0.0f
-	};
-
+	const float WidthScale{ NearPlane / HalfWidth };
+	const float HeightScale{ NearPlane / HalfHeight };
 	FShadowView Result{};
-	Result.mView = View;
-	Result.mProjection = Projection;
-	Result.mViewProjection = View * Projection;
-	if (WidthScale <= 0.0f || HeightScale <= 0.0f || !IsFiniteShadowMatrix(Result.mView) || !IsFiniteShadowMatrix(Result.mProjection) || !IsFiniteShadowMatrix(Result.mViewProjection)) {
+	Result.mView = BuildShadowViewMatrix(Position, Forward, Right, Up);
+	Result.mProjection = BuildPerspectiveShadowProjection(WidthScale, HeightScale, NearPlane, FarPlane);
+	if (WidthScale <= 0.0f || HeightScale <= 0.0f || !IsFiniteShadowMatrix(Result.mView) || !IsFiniteShadowMatrix(Result.mProjection)) {
 		return false;
 	}
-	Result.mWorldPosition = Position;
-	Result.mNearPlane = NearPlane;
-	Result.mFarPlane = FarPlane;
 	Result.mIsOrthographic = false;
-	OutView = Result;
-	return true;
+	Result.mCullBackFaces = false;
+	return FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView);
 }
 
-bool BuildPointShadowViews(const FVector& LightPosition, float AttenuationRadius, FShadowView (&OutViews)[PointShadowFaceCount]) {
+bool BuildPointShadowViews(const FTransform& LightTransform, float AttenuationRadius, FShadowView (&OutViews)[PointShadowFaceCount]) {
+	const FVector& LightPosition{ LightTransform.Location };
+	if (!IsFiniteShadowVector(LightPosition) || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
+		return false;
+	}
+
+	const float NearPlane{ std::min(0.01f, AttenuationRadius * 0.01f) };
+	if (NearPlane <= 0.0f) {
+		return false;
+	}
+	const float ProjectionScale{ 1.0f / std::tan(FMath::DegreesToRadians(45.0f)) };
+	const FMatrix Projection{ BuildPerspectiveShadowProjection(ProjectionScale, ProjectionScale, NearPlane, AttenuationRadius) };
 	const FVector Directions[PointShadowFaceCount]{ { 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } };
 	FShadowView Views[PointShadowFaceCount]{};
 	for (uint32 FaceIndex{}; FaceIndex < PointShadowFaceCount; ++FaceIndex) {
-		if (!BuildSpotShadowView(LightPosition, Directions[FaceIndex], 45.0f, AttenuationRadius, Views[FaceIndex])) {
+		const FVector& Forward{ Directions[FaceIndex] };
+		const FVector ReferenceUp{ std::abs(Forward.Z) < 0.99f ? FVector{ 0.0f, 0.0f, 1.0f } : FVector{ 0.0f, 1.0f, 0.0f } };
+		const FVector Right{ FVector::Cross(ReferenceUp, Forward).GetSafeNormal() };
+		const FVector Up{ FVector::Cross(Forward, Right) };
+		FShadowView Result{};
+		Result.mView = BuildShadowViewMatrix(LightPosition, Forward, Right, Up);
+		Result.mProjection = Projection;
+		Result.mIsOrthographic = false;
+		Result.mIsOmnidirectional = true;
+		if (!FinalizeShadowView(Result, LightPosition, NearPlane, AttenuationRadius, Views[FaceIndex])) {
 			return false;
 		}
-		Views[FaceIndex].mIsOmnidirectional = true;
 	}
 	std::copy(std::begin(Views), std::end(Views), std::begin(OutViews));
 	return true;

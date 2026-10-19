@@ -2,6 +2,7 @@
 #include "RectLightSceneProxy.h"
 
 #include "Components/RectLightComponent.h"
+#include "Math/Transform.h"
 #include "Render/ShadowView.h"
 
 void FRectLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out) const {
@@ -34,7 +35,7 @@ bool FRectLightSceneProxy::BuildShadowView(FShadowView& OutView) const {
 		return false;
 	}
 
-	FLightRenderParameters Parameters{};
-	GetLightShaderParameters(Parameters);
-	return BuildRectShadowView(Parameters.Position, Parameters.Direction, Parameters.Right, Parameters.HalfWidth, Parameters.HalfHeight, Parameters.Radius, Settings.mResolution, OutView);
+	const URectLightComponent* Rect{ static_cast<const URectLightComponent*>(LightComponent) };
+	const FTransform LightTransform{ Rect->GetWorldRotation(), Rect->GetWorldLocation() };
+	return BuildRectShadowView(LightTransform, Rect->GetWidth() * 0.5f, Rect->GetHeight() * 0.5f, Rect->GetAttenuationRadius(), OutView);
 }

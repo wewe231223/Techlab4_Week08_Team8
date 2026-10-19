@@ -61,14 +61,15 @@ bool FShadowRenderer::InitializeComparisonSampler() {
 	return SUCCEEDED(RenderCommand::GetDevice()->CreateSamplerState(&Desc, mComparisonSampler.GetAddressOf()));
 }
 
-bool FShadowRenderer::SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset) {
+bool FShadowRenderer::SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces) {
 	const EShadowDepthBiasPreset DepthPreset{ NormalizeShadowDepthBiasPreset(static_cast<int32>(DepthBiasPreset)) };
 	const EShadowSlopeScaledDepthBiasPreset SlopePreset{ NormalizeShadowSlopeScaledDepthBiasPreset(static_cast<int32>(SlopeScaledDepthBiasPreset)) };
-	Microsoft::WRL::ComPtr<ID3D11RasterizerState>& State{ mShadowRasterizerStates[static_cast<int32>(DepthPreset)][static_cast<int32>(SlopePreset)] };
+	const FShadowRasterizerStateKey Key{ DepthPreset, SlopePreset, CullBackFaces };
+	FShadowRasterizerState& State{ mShadowRasterizerStates[Key] };
 	if (!State) {
 		D3D11_RASTERIZER_DESC Desc{};
 		Desc.FillMode = D3D11_FILL_SOLID;
-		Desc.CullMode = D3D11_CULL_BACK;
+		Desc.CullMode = CullBackFaces ? D3D11_CULL_BACK : D3D11_CULL_NONE;
 		Desc.DepthClipEnable = TRUE;
 		Desc.DepthBias = GetShadowDepthBiasPreset(DepthPreset).mDepthBias;
 		Desc.SlopeScaledDepthBias = GetShadowSlopeScaledDepthBiasPreset(SlopePreset).mSlopeScaledDepthBias;
@@ -81,7 +82,7 @@ bool FShadowRenderer::SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasP
 }
 
 bool FShadowRenderer::IsValidShadowView(const FShadowView& View) {
-	if (!std::isfinite(View.mNearPlane) || !std::isfinite(View.mFarPlane) || View.mNearPlane < 0.0f || View.mFarPlane <= View.mNearPlane || !std::isfinite(View.mWorldPosition.X) || !std::isfinite(View.mWorldPosition.Y) || !std::isfinite(View.mWorldPosition.Z)) {
+	if (!std::isfinite(View.mNearPlane) || View.mNearPlane < 0.0f || !std::isfinite(View.mWorldPosition.X) || !std::isfinite(View.mWorldPosition.Y) || !std::isfinite(View.mWorldPosition.Z)) {
 		return false;
 	}
 	for (const FMatrix* Matrix : { &View.mView, &View.mProjection, &View.mViewProjection }) {
@@ -258,7 +259,7 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	for (uint32 Index{}; Index < static_cast<uint32>(Requests.Num()); ++Index) {
 		const FShadowAtlasAllocation& Allocation{ Allocations[Index] };
 		const FShadowMapRequest& Request{ Requests[Index] };
-		if (Allocation.mViewCount == 0 || !SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset)) {
+		if (Allocation.mViewCount == 0 || !SetShadowRasterizerState(Request.mSettings.mDepthBiasPreset, Request.mSettings.mSlopeScaledDepthBiasPreset, Request.mViews[0].mCullBackFaces)) {
 			continue;
 		}
 		const int32 FirstIndex{ static_cast<int32>(mShadowMapRenderParameters.Num()) };

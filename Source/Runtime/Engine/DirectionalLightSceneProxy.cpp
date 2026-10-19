@@ -2,20 +2,20 @@
 #include "DirectionalLightSceneProxy.h"
 
 #include "Components/DirectionalLightComponent.h"
+#include "Math/Transform.h"
 #include "Render/ShadowView.h"
 
-void FDirectionalLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out) const
-{
-	const UDirectionalLightComponent* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
+void FDirectionalLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out) const {
+	const UDirectionalLightComponent* Dir{ static_cast<const UDirectionalLightComponent*>(LightComponent) };
 
-	FTransform Transform;
+	FTransform Transform{};
 	Transform.Rotation = Dir->GetWorldRotation();
-	const FLinearColor Color(Dir->GetLightColor());
+	const FLinearColor Color{ Dir->GetLightColor() };
 
 	Out = FLightRenderParameters{};
 	Out.Type = static_cast<uint32>(ELightType::Directional);
 	Out.Direction = Transform.GetForward();
-	Out.Color = FVector(Color.R, Color.G, Color.B);
+	Out.Color = FVector{ Color.R, Color.G, Color.B };
 	Out.Intensity = Dir->GetIntensity();
 }
 
@@ -25,7 +25,6 @@ bool FDirectionalLightSceneProxy::BuildShadowView(const FBox& CasterBounds, FSha
 		return false;
 	}
 
-	FLightRenderParameters Parameters{};
-	GetLightShaderParameters(Parameters);
-	return BuildDirectionalShadowView(Parameters.Direction, CasterBounds, Settings.mResolution, OutView);
+	const FTransform LightTransform{ LightComponent->GetWorldRotation(), LightComponent->GetWorldLocation() };
+	return BuildDirectionalShadowView(LightTransform, CasterBounds, Settings.mResolution, OutView);
 }

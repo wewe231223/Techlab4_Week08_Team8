@@ -2,6 +2,7 @@
 #include "SpotLightSceneProxy.h"
 
 #include "Components/SpotLightComponent.h"
+#include "Math/Transform.h"
 #include "Render/ShadowView.h"
 
 void FSpotLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out) const {
@@ -26,7 +27,6 @@ bool FSpotLightSceneProxy::BuildShadowView(FShadowView& OutView) const {
 	}
 
 	const USpotLightComponent* Spot{ static_cast<const USpotLightComponent*>(LightComponent) };
-	FLightRenderParameters Parameters{};
-	GetLightShaderParameters(Parameters);
-	return BuildSpotShadowView(Parameters.Position, Parameters.Direction, Spot->GetOuterConeAngle(), Parameters.Radius, OutView);
+	const FTransform LightTransform{ Spot->GetWorldRotation(), Spot->GetWorldLocation() };
+	return BuildSpotShadowView(LightTransform, Spot->GetOuterConeAngle(), Spot->GetAttenuationRadius(), OutView);
 }

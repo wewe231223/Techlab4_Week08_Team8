@@ -2,6 +2,7 @@
 #include "PointLightSceneProxy.h"
 
 #include "Components/PointLightComponent.h"
+#include "Math/Transform.h"
 #include "Render/ShadowView.h"
 
 void FPointLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out) const {
@@ -21,7 +22,7 @@ bool FPointLightSceneProxy::BuildShadowViews(FShadowView (&OutViews)[PointShadow
 	if (!IsVisible() || !GetShadowSettings().mCastShadows || LightComponent->GetLightType() != ELightType::Point) {
 		return false;
 	}
-	FLightRenderParameters Parameters{};
-	GetLightShaderParameters(Parameters);
-	return BuildPointShadowViews(Parameters.Position, Parameters.Radius, OutViews);
+	const UPointLightComponent* Point{ static_cast<const UPointLightComponent*>(LightComponent) };
+	const FTransform LightTransform{ Point->GetWorldRotation(), Point->GetWorldLocation() };
+	return BuildPointShadowViews(LightTransform, Point->GetAttenuationRadius(), OutViews);
 }

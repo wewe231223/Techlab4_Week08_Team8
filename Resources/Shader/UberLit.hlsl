@@ -176,13 +176,13 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     if (LightClip.w <= 0.0f) {
         return 1.0f;
     }
-    const float3 LightPosition = { LightClip.xyz / LightClip.w };
-    if (any(abs(LightPosition.xy) > 1.0f) || LightPosition.z < 0.0f || LightPosition.z > 1.0f) {
+    const float3 ShadowNdc = { LightClip.xyz / LightClip.w };
+    if (any(abs(ShadowNdc.xy) > 1.0f) || ShadowNdc.z < 0.0f || ShadowNdc.z > 1.0f) {
         return 1.0f;
     }
 
-    const float2 ShadowUv = { LightPosition.xy * float2(0.5f, -0.5f) + 0.5f };
-    const float ComparisonDepth = { LightPosition.z };
+    const float2 ShadowUv = { ShadowNdc.xy * float2(0.5f, -0.5f) + 0.5f };
+    const float ComparisonDepth = { ShadowNdc.z };
 #if SHADOW_PCF
     const float2 ShadowTexelSize = { Parameters.mTexelSize / Parameters.mUvScaleBias.xy };
     float Visibility = { 0.0f };
@@ -204,14 +204,13 @@ float SamplePointShadow(FShadowMapRenderParameters Parameters, float4 LightClip)
     if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f) || LightClip.w <= 0.0f) {
         return 1.0f;
     }
-    const float3 LightPosition = { LightClip.xyz / LightClip.w };
-    if (any(abs(LightPosition.xy) > 1.000001f) || LightPosition.z < 0.0f || LightPosition.z > 1.0f) {
+    const float3 ShadowNdc = { LightClip.xyz / LightClip.w };
+    if (any(abs(ShadowNdc.xy) > 1.000001f) || ShadowNdc.z < 0.0f || ShadowNdc.z > 1.0f) {
         return 1.0f;
     }
-    const float2 ShadowUv = { LightPosition.xy * float2(0.5f, -0.5f) + 0.5f };
+    const float2 ShadowUv = { ShadowNdc.xy * float2(0.5f, -0.5f) + 0.5f };
     const float2 AtlasUv = { GetShadowAtlasUv(ShadowUv, Parameters) };
-    const int2 AtlasPixel = { (int2) (AtlasUv / Parameters.mTexelSize) };
-    return LightPosition.z <= ShadowAtlas.Load(int3(AtlasPixel, 0)) ? 1.0f : 0.0f;
+    return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ShadowNdc.z);
 }
 
 float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal) {
@@ -300,11 +299,14 @@ float3 GetAmbientLighting()
 
 // Directional Light의 영향을 구한다
 FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, float3 V, float3 WorldPos, float InShininess) {
-    float3 Radiance = { Light.Color * Light.Intensity };
+    const float3 Radiance = { Light.Color * Light.Intensity };
+    FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    Radiance *= CastShadow(Light.mShadowIndex, WorldPos, N);
+    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
+    Result.Diffuse *= Visibility;
+    Result.Specular *= Visibility;
 #endif
-    return SurfaceShading(N, -Light.Direction, V, Radiance, InShininess);
+    return Result;
 }
 
 FLightContribution AccumulateDirectionalLighting(float3 N, float3 V, float3 WorldPos, float InShininess) {
@@ -333,43 +335,56 @@ FLightContribution CalcSpotLight(FLightRenderParameters Light, float3 N, float3 
     return SurfaceShading(N, L, V, Light.Color * Light.Intensity * Attenuation * GetSpotConeAttenuation(Light, L), InShininess);
 }
 
-FLightContribution CalcRectLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess)
-{
-    const float3 Up = cross(Light.Direction, Light.Right);  // Z축
-    const float3 CenterToSurface = WorldPos - Light.Position;
+FLightContribution CalcRectLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess) {
+    const FLightContribution Unlit = { (FLightContribution) 0 };
+    if (any(!isfinite(float3(Light.HalfWidth, Light.HalfHeight, Light.Radius))) || Light.HalfWidth <= 0.0f || Light.HalfHeight <= 0.0f || Light.Radius <= 0.0f) {
+        return Unlit;
+    }
 
-    // 1) 사각형 위에서 표면과 가장 가까운 점 찾기
-    const float RectX = clamp(dot(CenterToSurface, Light.Right), -Light.HalfWidth,  Light.HalfWidth);   // 사각형 가로 좌표
-    const float RectY = clamp(dot(CenterToSurface, Up),          -Light.HalfHeight, Light.HalfHeight);  // 사각형 세로 좌표
-    const float3 ClosestPoint = Light.Position + Light.Right * RectX + Up * RectY;
+    const float DirectionLengthSquared = { dot(Light.Direction, Light.Direction) };
+    if (!isfinite(DirectionLengthSquared) || DirectionLengthSquared < 1.0e-8f) {
+        return Unlit;
+    }
+    const float3 Forward = { Light.Direction * rsqrt(DirectionLengthSquared) };
+    const float3 RightAxis = { Light.Right - Forward * dot(Light.Right, Forward) };
+    const float RightLengthSquared = { dot(RightAxis, RightAxis) };
+    if (!isfinite(RightLengthSquared) || RightLengthSquared < 1.0e-8f) {
+        return Unlit;
+    }
+    const float3 Right = { RightAxis * rsqrt(RightLengthSquared) };
+    const float3 Up = { cross(Forward, Right) };
+    const float3 CenterToSurface = { WorldPos - Light.Position };
+    const float ForwardDistance = { dot(CenterToSurface, Forward) };
+    if (!isfinite(ForwardDistance) || ForwardDistance <= 0.0f) {
+        return Unlit;
+    }
 
-    // 2) 가장 가까운 점을 점광원처럼 취급
-    float3 L;   // 표면 -> 빛
-    const float Attenuation = GetDistanceAttenuation(ClosestPoint, Light.Radius, Light.FalloffExponent, WorldPos, L);
+    const float NearPlane = { max(max(Light.HalfWidth, Light.HalfHeight), 0.01f) };
+    const float IntersectionScale = { NearPlane / (NearPlane + ForwardDistance) };
+    const float2 EmitterCoordinates = { float2(dot(CenterToSurface, Right), dot(CenterToSurface, Up)) * IntersectionScale };
+    if (any(!isfinite(EmitterCoordinates)) || any(abs(EmitterCoordinates) > float2(Light.HalfWidth, Light.HalfHeight))) {
+        return Unlit;
+    }
 
-    // 3) 면의 앞쪽만 비춘다 (뒤쪽이면 0)
-    const float FrontFace = saturate(dot(-L, Light.Direction));
-
-    // 4) 문 안쪽(프러스텀)만 통과
-    float BarnDoorMask = 1.0f;
-
-    // Door Length가 0이면 그냥 rect (전방향)
-    if (Light.BarnDoorLength > 0.0f)
-    {
-        const float3 EmitterToSurface = WorldPos - ClosestPoint;     // 발광면에서 표면으로
-        const float Distance = max(length(EmitterToSurface), 0.0001f);
-        const float ForwardDist = dot(EmitterToSurface, Light.Direction);
-        const float LateralX = abs(dot(EmitterToSurface, Light.Right));
-        const float LateralY = abs(dot(EmitterToSurface, Up));
-        // 옆으로 벌어진 각도가 frustum 안인가? (양수면 안쪽)
-        const float SlackX = (ForwardDist * Light.BarnDoorSin - LateralX * Light.BarnDoorCos) / Distance;
-        const float SlackY = (ForwardDist * Light.BarnDoorSin - LateralY * Light.BarnDoorCos) / Distance;
-        // Slack이 −0.05보다 작으면 0
-        // x,y 모두 닿아야 빛이 닿으므로 곱으로 마스크 만들기
+    const float3 EmitterPoint = { Light.Position + Right * EmitterCoordinates.x + Up * EmitterCoordinates.y };
+    float3 L = { 0.0f, 0.0f, 0.0f };
+    const float Attenuation = { GetDistanceAttenuation(EmitterPoint, Light.Radius, Light.FalloffExponent, WorldPos, L) };
+    if (Attenuation <= 0.0f) {
+        return Unlit;
+    }
+    const float FrontFace = { saturate(dot(-L, Forward)) };
+    float BarnDoorMask = { 1.0f };
+    if (Light.BarnDoorLength > 0.0f) {
+        const float3 EmitterToSurface = { WorldPos - EmitterPoint };
+        const float Distance = { max(length(EmitterToSurface), 0.0001f) };
+        const float LateralX = { abs(dot(EmitterToSurface, Right)) };
+        const float LateralY = { abs(dot(EmitterToSurface, Up)) };
+        const float SlackX = { (ForwardDistance * Light.BarnDoorSin - LateralX * Light.BarnDoorCos) / Distance };
+        const float SlackY = { (ForwardDistance * Light.BarnDoorSin - LateralY * Light.BarnDoorCos) / Distance };
         BarnDoorMask = smoothstep(-0.05f, 0.0f, SlackX) * smoothstep(-0.05f, 0.0f, SlackY);
     }
 
-    const float3 Radiance = Light.Color * Light.Intensity * Attenuation * FrontFace * BarnDoorMask;
+    const float3 Radiance = { Light.Color * Light.Intensity * Attenuation * FrontFace * BarnDoorMask };
     return SurfaceShading(N, L, V, Radiance, InShininess);
 }
 
