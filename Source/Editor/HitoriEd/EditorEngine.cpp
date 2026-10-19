@@ -1026,6 +1026,63 @@ void UEditorEngine::RenderShadowMapPass(UWorld& ViewWorld, const FRenderingInfo&
 		break;
 	}
 
+	for (const FLocalLightSceneProxy* proxy : Scene.LocalLightProxies)
+	{
+		if (!proxy->IsVisible()) continue;
+
+		FLightRenderParameters light{};
+		proxy->GetLightShaderParameters(light);
+
+		switch (static_cast<ELightType>(light.Type))
+		{
+		case ELightType::Point :
+		{
+			break;
+		}
+		case ELightType::Spot :
+		{
+			FVector lightposition = light.Position;
+			FVector direction = light.Direction.GetSafeNormal();
+			FVector right = light.Right.GetSafeNormal();
+			FVector up = direction.Cross(right).GetSafeNormal();
+			
+			const FMatrix LightCameraWorld(
+				FVector4(direction, 0.0f),
+				FVector4(right, 0.0f),
+				FVector4(up, 0.0f),
+				FVector4(lightposition, 1.0f)
+			);
+
+			const FMatrix lightview = LightCameraWorld.Inverse();
+
+			const float OuterHalfAngleRad = std::acos(FMath::Clamp(light.OuterConeCos, -1.0f, 1.0f));
+			constexpr float RadToDeg = 180.0f / 3.14159265359f;
+
+			FCameraProjection ShadowProjection{};
+			ShadowProjection.Mode = EProjectionMode::Perspective;
+			ShadowProjection.FovDegrees = 2.0f * OuterHalfAngleRad * RadToDeg;
+			ShadowProjection.NearClip = 0.1f;
+			ShadowProjection.FarClip = light.Radius;
+
+			// 정사각형 그림자맵 영역 기준
+			const FMatrix LightProjection = BuildProjectionMatrix(ShadowProjection, 1.0f);
+			const FMatrix LightViewProjection = lightview * LightProjection;
+
+			const FFrustumPlanes lightfrustum = ExtractFrustumPlanes(LightViewProjection);
+			MultipleViewportsAdapter.BuildShadowRenderQueue(lightfrustum, ShadowQueue);
+			shadowrenderer->OnRender(*Renderer, ShadowQueue, LightViewProjection);
+
+			break;
+		}
+		case ELightType::Rect :
+		{
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
 	RenderCommand::EndRenderPass(ShadowInfo);
 }
 

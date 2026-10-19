@@ -218,11 +218,11 @@ FLightContribution CalcPointLight(FLightRenderParameters Light, float3 N, float3
 }
 
 // Spot은 Point에서 원뿔 감쇠만 곱하면 된다
-FLightContribution CalcSpotLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess)
+FLightContribution CalcSpotLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess, float DirectionVisibility)
 {
     float3 L;
     const float Attenuation = GetDistanceAttenuation(Light.Position, Light.Radius, Light.FalloffExponent, WorldPos, L);
-    return SurfaceShading(N, L, V, Light.Color * Light.Intensity * Attenuation * GetSpotConeAttenuation(Light, L), InShininess);
+    return SurfaceShading(N, L, V, Light.Color * Light.Intensity * Attenuation * GetSpotConeAttenuation(Light, L) * DirectionVisibility, InShininess);
 }
 
 FLightContribution CalcRectLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess)
@@ -266,11 +266,11 @@ FLightContribution CalcRectLight(FLightRenderParameters Light, float3 N, float3 
 }
 
 // Type에 따라 Point / Spot / Rect로 나눠 계산한다
-FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess)
+FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess, float DirectionalVisibility)
 {
     FLightContribution Result;
     if (Light.Type == LIGHT_TYPE_SPOT)
-        Result = CalcSpotLight(Light, N, V, WorldPos, InShininess);
+        Result = CalcSpotLight(Light, N, V, WorldPos, InShininess, DirectionalVisibility);
     else if (Light.Type == LIGHT_TYPE_RECT)
         Result = CalcRectLight(Light, N, V, WorldPos, InShininess);
     else
@@ -385,7 +385,7 @@ FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos,
     for (uint Index = 0; Index < LightCount; ++Index)
     {
         const uint LightIndex = bUseCellList ? CellLightIndices[CellOffset + 1 + Index] : Index;
-        const FLightContribution LightContribution = CalcLocalLight(LocalLights[LightIndex], N, V, WorldPos, InShininess);
+        const FLightContribution LightContribution = CalcLocalLight(LocalLights[LightIndex], N, V, WorldPos, InShininess, DirectionalVisibility);
         Total.Diffuse += LightContribution.Diffuse;
         Total.Specular += LightContribution.Specular;
     }

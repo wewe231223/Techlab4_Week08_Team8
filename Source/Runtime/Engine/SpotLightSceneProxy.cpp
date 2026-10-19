@@ -15,6 +15,7 @@ void FSpotLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out)
 
     Out.Type = static_cast<uint32>(ELightType::Spot);
     Out.Direction = Transform.GetForward();
+    Out.Right = Transform.GetRight();
     Out.InnerConeCos = std::cos(FMath::DegreesToRadians(Inner));
     Out.OuterConeCos = std::cos(FMath::DegreesToRadians(Outer));
 }
