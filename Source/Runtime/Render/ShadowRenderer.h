@@ -75,6 +75,8 @@ private:
 	static void GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
 	bool InitializeShadowPass();
 	bool InitializeAtlasResource(int32 Resolution, int32 PageCount);
+	// 이번에 쓰는 페이지 수를 기록하고, 아틀라스에 남겨 둘 페이지 수를 돌려준다. 0이면 아틀라스를 해제해도 된다.
+	uint32 UpdateAtlasPageUsage(uint32 UsedPageCount);
 	bool InitializeComparisonSampler();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
@@ -92,6 +94,8 @@ private:
 	static constexpr int32 mMaxAtlasPageCount = 4;
 
 	static constexpr uint32 mPreviewResolution{ 512 };
+	// 쓰지 않는 아틀라스 페이지를 해제하기까지 기다리는 그림자 렌더 횟수. 뷰포트마다 한 번씩 세므로 뷰포트가 많으면 더 빨리 해제된다.
+	static constexpr uint32 mAtlasPageIdleDelay{ 120 };
 
 	TUniquePtr<FTexture2D> mDepthTexture{};
 
@@ -115,4 +119,5 @@ private:
 	TMap<const ULightComponent*, FShadowMapAllocation> mShadowMapAllocations{};
 	bool mShadowMapReady{};
 	bool mShadowPcfEnabled{};
+	uint32 mAtlasPageIdleCounts[mMaxAtlasPageCount]{}; // 페이지별로 연속해서 쓰이지 않은 그림자 렌더 횟수
 };

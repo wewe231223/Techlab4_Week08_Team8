@@ -272,23 +272,44 @@ int32 FShadowRenderer::NormalizeAtlasResolution(int32 Resolution) {
 	return static_cast<int32>(std::bit_ceil(Size));
 }
 
+uint32 FShadowRenderer::UpdateAtlasPageUsage(uint32 UsedPageCount) {
+	// 페이지(층)마다 연속으로 쓰이지 않은 렌더 횟수를 센다.
+	// 할당은 매번 0번 페이지부터 채우므로 이번에 쓰는 페이지는 항상 [0, UsedPageCount)이다.
+	for (uint32 Page{}; Page < static_cast<uint32>(mMaxAtlasPageCount); ++Page) {
+		mAtlasPageIdleCounts[Page] = Page < UsedPageCount ? 0 : std::min(mAtlasPageIdleCounts[Page] + 1, mAtlasPageIdleDelay);
+	}
+
+	// 지금 있는 층 중 쓰지 않게 된 지 mAtlasPageIdleDelay번이 안 된 페이지는 남겨 둔다.
+	// Texture2DArray는 층 하나만 해제할 수 없으므로, 남길 페이지 중 가장 뒤 번호까지를 새 층 수로 쓴다.
+	const uint32 ExistingPageCount{ mDepthTexture ? std::min(mDepthTexture->GetArraySize(), static_cast<uint32>(mMaxAtlasPageCount)) : 0 };
+	uint32 KeepPageCount{ UsedPageCount };
+	for (uint32 Page{ UsedPageCount }; Page < ExistingPageCount; ++Page) {
+		if (mAtlasPageIdleCounts[Page] < mAtlasPageIdleDelay) {
+			KeepPageCount = Page + 1;
+		}
+	}
+	return KeepPageCount;
+}
+
 bool FShadowRenderer::InitializeAtlasResource(int32 Resolution, int32 PageCount) {
 	const uint32 Size{ static_cast<uint32>(NormalizeAtlasResolution(Resolution)) };
+	// 지금 쓰는 페이지와, 쓰지 않게 된 지 오래되지 않은 페이지까지 남긴 층 수.
+	const uint32 KeepPageCount{ UpdateAtlasPageUsage(static_cast<uint32>(PageCount)) };
 	if (mDepthTexture && mDepthTexture->GetRawPtr()
 		&& mDepthTexture->GetSRV()
 		&& mDepthTexture->GetDSV()
-		&& mDepthTexture->GetWidth() == Size 
+		&& mDepthTexture->GetWidth() == Size
 		&& mDepthTexture->GetHeight() == Size
-		&& mDepthTexture->GetArraySize() >= static_cast<uint32>(PageCount)) {
-		// 페이지 수가 줄어든 경우에는 남는 층을 쓰지 않을 뿐이므로 다시 만들지 않는다. 늘어날 때만 다시 만든다.
+		&& mDepthTexture->GetArraySize() == KeepPageCount) {
 		return true;
 	}
 
+	// 페이지가 늘었거나, 오래 쓰지 않은 페이지를 해제할 때 다시 만든다. 내용은 매 프레임 다시 그리므로 옮길 필요가 없다.
 	D3D11_TEXTURE2D_DESC Desc{};
 	Desc.Width = Size;
 	Desc.Height = Size;
 	Desc.MipLevels = 1;
-	Desc.ArraySize = PageCount;
+	Desc.ArraySize = KeepPageCount;
 	Desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	Desc.SampleDesc.Count = 1;
 	Desc.Usage = D3D11_USAGE_DEFAULT;
@@ -335,7 +356,17 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	for (const FShadowAtlasAllocation& Allocation : Allocations) {
 		ParameterCount += Allocation.mViewCount;
 	}
-	if (ParameterCount == 0 || !InitializeShadowPass() || !InitializeAtlasResource(static_cast<int32>(Size), PageCount)) {
+
+	//TODO : 아틀라스를 다루는 클래스를 만들면, 모든 라이트가 해재되었을 때가 아닌, 아틀라스 텍스쳐 단위로 추적하도록 변경
+	if (ParameterCount == 0) {
+		// 이번에는 어떤 페이지도 쓰지 않는다. 모든 페이지가 오래 쓰이지 않으면 아틀라스를 통째로 해제한다.
+		// 다시 필요해지면 InitializeAtlasResource가 만든다.
+		if (UpdateAtlasPageUsage(0) == 0) {
+			mDepthTexture.reset();
+		}
+		return false;
+	}
+	if (!InitializeShadowPass() || !InitializeAtlasResource(static_cast<int32>(Size), PageCount)) {
 		return false;
 	}
 	if (!mShadowMapBuffer || mShadowMapBuffer->GetMaxCount() < ParameterCount) {
