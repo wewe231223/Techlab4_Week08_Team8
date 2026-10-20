@@ -25,7 +25,7 @@ FLightShadowSettings FLightSceneProxy::GetShadowSettings() const {
 	return LightComponent ? LightComponent->GetShadowSettings() : FLightShadowSettings{};
 }
 
-bool FLightSceneProxy::EvaluateShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, const FShadowAtlas& Atlas, uint64 UpdateSerial) {
+bool FLightSceneProxy::EvaluateShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, const FShadowAtlas& Atlas, uint64 UpdateSerial, float MinCasterTexelRadius) {
 	if (!Atlas.IsCacheEnabled() || FaceIndex >= Allocation.mViewCount) {
 		return false;
 	}
@@ -36,7 +36,7 @@ bool FLightSceneProxy::EvaluateShadowMap(FScene& Scene, const FShadowMapRequest&
 
 	mShadowMaps.SetNum(Allocation.mViewCount);
 	FShadowMapState& Map{ mShadowMaps[FaceIndex] };
-	PrepareShadowMap(Scene, Request, Allocation, FaceIndex, Map, UpdateSerial);
+	PrepareShadowMap(Scene, Request, Allocation, FaceIndex, Map, UpdateSerial, MinCasterTexelRadius);
 
 	const FShadowUpdateContext Context{ &Map.mInput, &Map.mCasters, &Map.mRenderedCasters };
 	return mShadowUpdatePolicy->Evaluate(Context, Atlas.GetCacheEntry(Request.mLightComponent, FaceIndex));
@@ -74,8 +74,27 @@ bool FLightSceneProxy::IsShadowCaster(const FPrimitiveSceneProxy* Proxy) {
 	return false;
 }
 
+// 섀도우 맵에서의 반지름(텍셀) = r * ProjectionScale / Depth * (Resolution / 2)
+// 원근: Depth = 라이트 forward 방향 거리,  직교: Depth = 1
+bool FLightSceneProxy::IsShadowCasterTooSmall(const FPrimitiveSceneProxy& Proxy, const FLODViewContext& View, float MinCasterTexelRadius) {
+	if (!(MinCasterTexelRadius > 0.0f)) {
+		return false;
+	}
 
-void FLightSceneProxy::GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution) {
+	const FLODSphere& Sphere{ Proxy.GetLODSphere() };
+	const float Depth{ View.bOrthographic ? 1.0f : FVector::Dot(Sphere.Center, View.CameraForward) - View.CameraDepth };
+	// 라이트에 너무 가까우면 투영 크기를 신뢰할 수 없으므로 유지한다.
+	if (!View.bOrthographic && Depth - View.NearZ <= 0.0f) {
+		return false;
+	}
+
+	const float HalfResolution{ 0.5f * static_cast<float>(View.Width) };
+	// 양변을 제곱해 sqrt 없이 비교한다.
+	return Sphere.RadiusSquared * View.ProjectionScaleSquared * HalfResolution * HalfResolution
+		< MinCasterTexelRadius * MinCasterTexelRadius * Depth * Depth;
+}
+
+void FLightSceneProxy::GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution, float MinCasterTexelRadius) {
 	OutQueue.Reset();
 	const FFrustumPlanes Frustum{ ExtractFrustumPlanes(View.mViewProjection) };
 	const float ProjectionScale{ std::max(std::abs(View.mProjection.M[1][0]), std::abs(View.mProjection.M[2][1])) };
@@ -93,7 +112,7 @@ void FLightSceneProxy::GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue
 
 	Scene.BVH.QueryCull(FrustumAllPlanesMask, [&Frustum](const FBox& Bounds, uint32& Mask) {
 		return static_cast<EBVHCullResult>(ClassifyBoxInFrustum(Bounds, Frustum, Mask));
-	}, [&OutQueue, &LODView, &View](FPrimitiveSceneProxy* Proxy) {
+	}, [&OutQueue, &LODView, &View, MinCasterTexelRadius](FPrimitiveSceneProxy* Proxy) {
 		if (!IsShadowCaster(Proxy)) {
 			return;
 		}
@@ -103,12 +122,16 @@ void FLightSceneProxy::GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue
 			CasterLODView.CameraForward = (Proxy->GetLODSphere().Center - View.mWorldPosition).GetSafeNormal();
 			CasterLODView.Prepare();
 		}
+		// 그림자 맵에 그려질 텍셀이 너무 작으면 건너뛴다.
+		if (IsShadowCasterTooSmall(*Proxy, CasterLODView, MinCasterTexelRadius)) {
+			return;
+		}
 		const uint32 LODIndex{ SelectLOD(*Proxy, CasterLODView) };
 		AddShadowCasterPackets(OutQueue, *Proxy, LODIndex);
 	});
 }
 
-void FLightSceneProxy::PrepareShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, FShadowMapState& OutMap, uint64 UpdateSerial) {
+void FLightSceneProxy::PrepareShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, FShadowMapState& OutMap, uint64 UpdateSerial, float MinCasterTexelRadius) {
 	const FShadowAtlas::FTile& Tile{ Allocation.mTiles[FaceIndex] };
 	FShadowCacheEntry& Input{ OutMap.mInput };
 	Input.mView = Request.mViews[FaceIndex];
@@ -117,10 +140,10 @@ void FLightSceneProxy::PrepareShadowMap(FScene& Scene, const FShadowMapRequest& 
 	Input.mSlopeScaledDepthBiasPreset = NormalizeShadowSlopeScaledDepthBiasPreset(static_cast<int32>(Request.mSettings.mSlopeScaledDepthBiasPreset));
 	Input.mHasCachedContent = false;
 
-	GatherShadowCasterReferences(Scene, OutMap.mCasters, Input.mView, static_cast<int32>(Tile.mResolution), UpdateSerial);
+	GatherShadowCasterReferences(Scene, OutMap.mCasters, Input.mView, static_cast<int32>(Tile.mResolution), UpdateSerial, MinCasterTexelRadius);
 }
 
-void FLightSceneProxy::GatherShadowCasterReferences(FScene& Scene, TArray<FShadowCasterReference>& OutCasters, const FShadowView& View, int32 Resolution, uint64 UpdateSerial) {
+void FLightSceneProxy::GatherShadowCasterReferences(FScene& Scene, TArray<FShadowCasterReference>& OutCasters, const FShadowView& View, int32 Resolution, uint64 UpdateSerial, float MinCasterTexelRadius) {
 	OutCasters.Reset();
 	const FFrustumPlanes Frustum{ ExtractFrustumPlanes(View.mViewProjection) };
 	const float ProjectionScale{ std::max(std::abs(View.mProjection.M[1][0]), std::abs(View.mProjection.M[2][1])) };
@@ -138,7 +161,7 @@ void FLightSceneProxy::GatherShadowCasterReferences(FScene& Scene, TArray<FShado
 
 	Scene.BVH.QueryCull(FrustumAllPlanesMask, [&Frustum](const FBox& Bounds, uint32& Mask) {
 		return static_cast<EBVHCullResult>(ClassifyBoxInFrustum(Bounds, Frustum, Mask));
-	}, [&OutCasters, &LODView, &View, UpdateSerial](FPrimitiveSceneProxy* Proxy) {
+	}, [&OutCasters, &LODView, &View, UpdateSerial, MinCasterTexelRadius](FPrimitiveSceneProxy* Proxy) {
 		if (!Proxy) {
 			return;
 		}
@@ -151,6 +174,10 @@ void FLightSceneProxy::GatherShadowCasterReferences(FScene& Scene, TArray<FShado
 		if (View.mIsOmnidirectional) {
 			CasterLODView.CameraForward = (Proxy->GetLODSphere().Center - View.mWorldPosition).GetSafeNormal();
 			CasterLODView.Prepare();
+		}
+		// 그림자 맵에 그려질 텍셀이 너무 작으면 목록에서 제외해 캐시 비교 대상에서도 뺀다.
+		if (IsShadowCasterTooSmall(*Proxy, CasterLODView, MinCasterTexelRadius)) {
+			return;
 		}
 		const uint32 LODIndex{ SelectLOD(*Proxy, CasterLODView) };
 		OutCasters.Add(FShadowCasterReference{ Proxy, Proxy->GetShadowRevision(), LODIndex });

@@ -10,6 +10,7 @@
 
 class FScene;
 class FPrimitiveSceneProxy;
+struct FLODViewContext;
 
 class FLightSceneProxy
 {
@@ -34,7 +35,7 @@ public:
 	const ULightComponent* GetLightComponent() const;
 	bool IsVisible() const;
 	FLightShadowSettings GetShadowSettings() const;
-	bool EvaluateShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, const FShadowAtlas& Atlas, uint64 UpdateSerial);
+	bool EvaluateShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, const FShadowAtlas& Atlas, uint64 UpdateSerial, float MinCasterTexelRadius);
 	void ResetShadowMaps();
 	void RemoveShadowCaster(const FPrimitiveSceneProxy* Caster, FShadowAtlas& Atlas);
 	bool BuildShadowRenderQueue(FRenderQueue& OutQueue, uint32 FaceIndex) const;
@@ -42,12 +43,15 @@ public:
 	const FShadowMapState* GetShadowMap(uint32 FaceIndex = 0) const;
 	void AddShadowCondition(TUniquePtr<IShadowInvalidationCondition> Condition);
 	static bool IsShadowCaster(const FPrimitiveSceneProxy* Proxy);
-	static void GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
+	// MinCasterTexelRadius 이하로 그려질 Caster는 제외한다. 0 이하이면 크기 컬링을 끈다.
+	static void GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution, float MinCasterTexelRadius);
 
 
 private:
-	static void PrepareShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, FShadowMapState& OutMap, uint64 UpdateSerial);
-	static void GatherShadowCasterReferences(FScene& Scene, TArray<FShadowCasterReference>& OutCasters, const FShadowView& View, int32 Resolution, uint64 UpdateSerial);
+	// 그림자 맵에서 Caster 경계 구의 반지름이 MinCasterTexelRadius 텍셀보다 작은지.
+	static bool IsShadowCasterTooSmall(const FPrimitiveSceneProxy& Proxy, const FLODViewContext& View, float MinCasterTexelRadius);
+	static void PrepareShadowMap(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlas::FAllocation& Allocation, uint32 FaceIndex, FShadowMapState& OutMap, uint64 UpdateSerial, float MinCasterTexelRadius);
+	static void GatherShadowCasterReferences(FScene& Scene, TArray<FShadowCasterReference>& OutCasters, const FShadowView& View, int32 Resolution, uint64 UpdateSerial, float MinCasterTexelRadius);
 	static void AddShadowCasterPackets(FRenderQueue& OutQueue, const FPrimitiveSceneProxy& Proxy, uint32 LODIndex, const FMatrix* Model = nullptr);
 
 protected:

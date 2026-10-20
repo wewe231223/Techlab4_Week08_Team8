@@ -22,6 +22,7 @@ struct FEditorSettings
 	bool bEnableFXAA = true;
 	bool mEnableShadowPcf{};
 	bool mEnableShadowCache{ true };
+	float mMinShadowCasterTexelRadius{ 1.0f };	// 그림자 맵에서 이 텍셀 반지름보다 작은 Caster는 제외. 0이면 끔
 	float Exposure = 1.0f;	// 톤 매핑 전에 HDR 색에 곱하는 노출 값
 	bool bDepthView = false;
 	bool bExponentialHeightFog = true;

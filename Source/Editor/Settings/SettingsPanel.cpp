@@ -45,6 +45,7 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("FXAA", &Settings.bEnableFXAA);
 	ImGui::Checkbox("Shadow PCF", &Settings.mEnableShadowPcf);
 	ImGui::Checkbox("Shadow Map Cache", &Settings.mEnableShadowCache);
+	ImGui::SliderFloat("Shadow Caster Min Texels", &Settings.mMinShadowCasterTexelRadius, 0.0f, 8.0f, "%.1f");
 	ImGui::SliderFloat("Exposure", &Settings.Exposure, 0.1f, 5.0f, "%.2f");
 	ImGui::Checkbox("Depth View", &Settings.bDepthView);
 	ImGui::Checkbox("Exponential Height Fog", &Settings.bExponentialHeightFog);
@@ -129,6 +130,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "EnableFXAA=" << Settings.bEnableFXAA << "\n";
 	File << "EnableShadowPCF=" << Settings.mEnableShadowPcf << "\n";
 	File << "EnableShadowCache=" << Settings.mEnableShadowCache << "\n";
+	File << "ShadowCasterMinTexelRadius=" << Settings.mMinShadowCasterTexelRadius << "\n";
 	File << "LightingModel=" << Settings.LightingModel << "\n";
 	File << "\n";
 
@@ -253,6 +255,7 @@ bool FSettingsPanel::LoadSettings()
 				else if (Key == "EnableFXAA") Settings.bEnableFXAA = std::stoi(ValueStr);
 				else if (Key == "EnableShadowPCF") Settings.mEnableShadowPcf = std::stoi(ValueStr) != 0;
 				else if (Key == "EnableShadowCache") Settings.mEnableShadowCache = std::stoi(ValueStr) != 0;
+				else if (Key == "ShadowCasterMinTexelRadius") Settings.mMinShadowCasterTexelRadius = std::stof(ValueStr);
 				else if (Key == "LightingModel") Settings.LightingModel = std::stoi(ValueStr);
 
 				else if (Key == "CameraMoveSpeed") Settings.CameraSpeed = std::stof(ValueStr);

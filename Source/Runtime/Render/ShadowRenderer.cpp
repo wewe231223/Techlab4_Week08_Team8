@@ -475,6 +475,14 @@ bool FShadowRenderer::IsShadowCacheEnabled() const {
 	return mShadowCacheEnabled;
 }
 
+void FShadowRenderer::SetMinShadowCasterTexelRadius(float TexelRadius) {
+	mMinShadowCasterTexelRadius = std::isfinite(TexelRadius) ? std::max(TexelRadius, 0.0f) : 0.0f;
+}
+
+float FShadowRenderer::GetMinShadowCasterTexelRadius() const {
+	return mMinShadowCasterTexelRadius;
+}
+
 void FShadowRenderer::ConfigureShadowCache(FScene& Scene, const TArray<FShadowMapRequest>& Requests) {
 	FShadowAtlas& Atlas{ Scene.GetShadowAtlas() };
 	if (Atlas.IsCacheEnabled() == mShadowCacheEnabled) {
@@ -511,7 +519,7 @@ void FShadowRenderer::RenderLightShadowMaps(FScene& Scene, const FShadowMapReque
 
 	for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
 		const FShadowAtlasTile& Tile{ Allocation.mTiles[FaceIndex] };
-		FLightSceneProxy::GatherShadowCasters(Scene, mShadowRenderQueue, Request.mViews[FaceIndex], static_cast<int32>(Tile.mResolution));
+		FLightSceneProxy::GatherShadowCasters(Scene, mShadowRenderQueue, Request.mViews[FaceIndex], static_cast<int32>(Tile.mResolution), mMinShadowCasterTexelRadius);
 		DrawShadowCasters(mShadowRenderQueue, Request.mViews[FaceIndex], Tile);
 	}
 	AddShadowMapParameters(Request, Allocation, Request.mViews);
@@ -523,7 +531,7 @@ void FShadowRenderer::UpdateLightShadowMaps(FScene& Scene, const FShadowMapReque
 	// 모든 면의 재사용 또는 렌더링이 완료되어야 광원의 샘플링 정보를 등록한다.
 	bool IsComplete{ true };
 	for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
-		if (!Request.mLightProxy->EvaluateShadowMap(Scene, Request, Allocation, FaceIndex, Atlas, UpdateSerial)) {
+		if (!Request.mLightProxy->EvaluateShadowMap(Scene, Request, Allocation, FaceIndex, Atlas, UpdateSerial, mMinShadowCasterTexelRadius)) {
 			Atlas.InvalidateCacheEntry(Request.mLightComponent, FaceIndex);
 			const FLightSceneProxy::FShadowMapState* Map{ Request.mLightProxy->GetShadowMap(FaceIndex) };
 			if (!Map || !Request.mLightProxy->BuildShadowRenderQueue(mShadowRenderQueue, FaceIndex) || !SetShadowRasterizerState(Map->mInput.mDepthBiasPreset, Map->mInput.mSlopeScaledDepthBiasPreset, Map->mInput.mView.mCullBackFaces)) {
