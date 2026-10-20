@@ -7,6 +7,10 @@
 #define SHADOW_PCF 0
 #endif
 
+#ifndef SHADOW_PCSS
+#define SHADOW_PCSS 0
+#endif
+
 #define LIGHT_TYPE_POINT 1   // C++ ELightType과 같아야 함
 #define LIGHT_TYPE_SPOT  2
 #define LIGHT_TYPE_RECT  3
@@ -28,6 +32,9 @@
     !defined(WORLD_NORMAL)
 #define LIGHTING_MODEL_LAMBERT 1
 #endif
+
+// PCSS시 샘플링 횟수
+#define PCSS_SAMPLES 64
 
 // 아래 구조체와 cbuffer Lighting은 Renderer.h의 FLightingConstants와 바이트 단위로 같아야 한다.
 struct FAmbientLightInfo
@@ -161,23 +168,104 @@ struct FLightContribution
     float3 Specular;
 };
 
+// 단위 원판 안의 고정 샘플 64개. 각 사분면에 16개씩 중심 대칭으로 배치한다.
+static const float2 StaticDisk[PCSS_SAMPLES] =
+{
+    // 1사분면
+    float2(0.176564, 0.008674),
+    float2(0.205622, 0.226869),
+    float2(0.357333, 0.169006),
+    float2(0.157566, 0.440367),
+    float2(0.514437, 0.128860),
+    float2(0.301419, 0.502888),
+    float2(0.511946, 0.379685),
+    float2(0.100459, 0.677243),
+    float2(0.720980, 0.106947),
+    float2(0.459017, 0.618913),
+    float2(0.694840, 0.416471),
+    float2(0.205996, 0.822384),
+    float2(0.832215, 0.297771),
+    float2(0.392734, 0.830367),
+    float2(0.705364, 0.639305),
+    float2(0.048295, 0.983065),
+
+    // 2사분면
+    float2(-0.008674, 0.176564),
+    float2(-0.226869, 0.205622),
+    float2(-0.169006, 0.357333),
+    float2(-0.440367, 0.157566),
+    float2(-0.128860, 0.514437),
+    float2(-0.502888, 0.301419),
+    float2(-0.379685, 0.511946),
+    float2(-0.677243, 0.100459),
+    float2(-0.106947, 0.720980),
+    float2(-0.618913, 0.459017),
+    float2(-0.416471, 0.694840),
+    float2(-0.822384, 0.205996),
+    float2(-0.297771, 0.832215),
+    float2(-0.830367, 0.392734),
+    float2(-0.639305, 0.705364),
+    float2(-0.983065, 0.048295),
+
+    // 3사분면
+    float2(-0.176564, -0.008674),
+    float2(-0.205622, -0.226869),
+    float2(-0.357333, -0.169006),
+    float2(-0.157566, -0.440367),
+    float2(-0.514437, -0.128860),
+    float2(-0.301419, -0.502888),
+    float2(-0.511946, -0.379685),
+    float2(-0.100459, -0.677243),
+    float2(-0.720980, -0.106947),
+    float2(-0.459017, -0.618913),
+    float2(-0.694840, -0.416471),
+    float2(-0.205996, -0.822384),
+    float2(-0.832215, -0.297771),
+    float2(-0.392734, -0.830367),
+    float2(-0.705364, -0.639305),
+    float2(-0.048295, -0.983065),
+
+    // 4사분면
+    float2(0.008674, -0.176564),
+    float2(0.226869, -0.205622),
+    float2(0.169006, -0.357333),
+    float2(0.440367, -0.157566),
+    float2(0.128860, -0.514437),
+    float2(0.502888, -0.301419),
+    float2(0.379685, -0.511946),
+    float2(0.677243, -0.100459),
+    float2(0.106947, -0.720980),
+    float2(0.618913, -0.459017),
+    float2(0.416471, -0.694840),
+    float2(0.822384, -0.205996),
+    float2(0.297771, -0.832215),
+    float2(0.830367, -0.392734),
+    float2(0.639305, -0.705364),
+    float2(0.983065, -0.048295)
+};
+
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
-    if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps) {
+float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal, float Radius)
+{
+    if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps)
+    {
         return 1.0f;
     }
 
     const FShadowMapRenderParameters Parameters = { ShadowMaps[ShadowIndex] };
-    if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f)) {
+    if (Parameters.mTextureIndex != 0 || Parameters.mArraySlice != 0 || any(Parameters.mUvScaleBias.xy <= 0.0f))
+    {
         return 1.0f;
     }
 
     const float4 LightClip = { mul(float4(WorldPos + Normal * Parameters.mNormalBias, 1.0f), Parameters.mLightViewProjection) };
-    if (LightClip.w <= 0.0f) {
+    if (LightClip.w <= 0.0f)
+    {
         return 1.0f;
     }
     const float3 ShadowNdc = { LightClip.xyz / LightClip.w };
-    if (any(abs(ShadowNdc.xy) > 1.0f) || ShadowNdc.z < 0.0f || ShadowNdc.z > 1.0f) {
+    if (any(abs(ShadowNdc.xy) > 1.0f) || ShadowNdc.z < 0.0f || ShadowNdc.z > 1.0f)
+    {
         return 1.0f;
     }
 
@@ -195,6 +283,22 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
         }
     }
     return Visibility / 9.0f;
+#elif SHADOW_PCSS
+    const float2 ShadowTexelSize = { Parameters.mTexelSize / Parameters.mUvScaleBias.xy };
+
+    const float2 CurAtlasUv = { GetShadowAtlasUv(ShadowUv, Parameters) };
+    int2 AtlasTexel = int2(CurAtlasUv / Parameters.mTexelSize);
+    float StoredDepth = ShadowAtlas.Load(int3(AtlasTexel, 0));
+    float TexelRadius = Radius * (ComparisonDepth - StoredDepth) / StoredDepth;
+
+    float Visibility = { 0.0f };
+    [unroll]
+    for (int i = 0; i < PCSS_SAMPLES; i++)
+    {
+        const float2 AtlasUv = { GetShadowAtlasUv(ShadowUv + StaticDisk[i] * TexelRadius * ShadowTexelSize, Parameters) };
+        Visibility += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ComparisonDepth);
+    }
+    return Visibility / PCSS_SAMPLES;
 #else
     return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, GetShadowAtlasUv(ShadowUv, Parameters), ComparisonDepth);
 #endif
@@ -213,7 +317,7 @@ float SamplePointShadow(FShadowMapRenderParameters Parameters, float4 LightClip)
     return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ShadowNdc.z);
 }
 
-float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal) {
+float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal, float Radius) {
     if (mReceiveShadows == 0 || Light.mShadowIndex < 0 || NumShadowMaps < PointShadowFaceCount || (uint) Light.mShadowIndex > NumShadowMaps - PointShadowFaceCount) {
         return 1.0f;
     }
@@ -247,6 +351,63 @@ float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Norm
         }
     }
     return Visibility / 9.0f;
+#elif SHADOW_PCSS
+
+    const float3 Right = { float3(Parameters.mLightViewProjection[0][0], Parameters.mLightViewProjection[1][0], Parameters.mLightViewProjection[2][0]) };
+    const float3 Up = { float3(Parameters.mLightViewProjection[0][1], Parameters.mLightViewProjection[1][1], Parameters.mLightViewProjection[2][1]) };
+    const float ReceiverDistance = { sqrt(DistanceSquared) };
+    // BuildPointShadowViews와 같은 투영 범위를 사용해 깊이를 복원한다.
+    const float ShadowNear = min(0.01f, Light.Radius * 0.01f);
+    const float ShadowFar = Light.Radius;
+
+    float SearchRadius = 1.0f; // 월드 단위 탐색 반경. Todo : 수정
+    float BlockerDistanceSum = 0.0f;
+    float BlockerCnt = 0.0f;
+    [unroll]
+    for(int k = 0 ; k < PCSS_SAMPLES; ++k)
+    {
+        const float3 SampleDirection = { ReceiverDirection + Right * (StaticDisk[k].x * SearchRadius) - Up * (StaticDisk[k].y * SearchRadius) };
+        const uint SampleFaceIndex = { GetPointShadowFaceIndex(SampleDirection) };
+        const FShadowMapRenderParameters SampleParameters = { ShadowMaps[FirstIndex + SampleFaceIndex] };
+        const float3 SamplePosition = { Light.Position + SampleDirection * (ReceiverDistance * rsqrt(dot(SampleDirection, SampleDirection))) };
+        const float4 SampleClip = { mul(float4(SamplePosition, 1.0f), SampleParameters.mLightViewProjection) };
+        const float3 SampleNdc = SampleClip.xyz / SampleClip.w;
+        const float2 SampleUv = SampleNdc.xy * float2(0.5f, -0.5f) + 0.5f;
+        const float2 AtlasUv = GetShadowAtlasUv(SampleUv, SampleParameters);
+        const int2 AtlasTexel = int2(AtlasUv / SampleParameters.mTexelSize);
+        const float SampleDepth = ShadowAtlas.Load(int3(AtlasTexel, 0));
+        const bool IsBlocker = SampleDepth < SampleNdc.z;
+        if(IsBlocker)
+        {
+            const float BlockerViewDepth = (ShadowNear * ShadowFar) /
+                (ShadowFar - SampleDepth * (ShadowFar - ShadowNear));
+            // 큐브 면의 정면 방향 깊이를 광원까지의 직선거리로 변환한다.
+            const float BlockerDistance = BlockerViewDepth * (ReceiverDistance / SampleClip.w);
+            BlockerDistanceSum += BlockerDistance;
+            BlockerCnt += 1;
+        }
+    }
+
+    if (BlockerCnt == 0.0f)
+        return 1.0f;
+
+    const float AverageBlockerDistance = BlockerDistanceSum / BlockerCnt;
+    const float PenumbraRadiusWorld = Radius * max(ReceiverDistance - AverageBlockerDistance, 0.0f) /
+        max(AverageBlockerDistance, 1.0e-6f);
+
+    float Visibility = { 0.0f };
+    [unroll]
+    for (int i = 0; i < PCSS_SAMPLES; ++i)
+    {
+        const float3 SampleDirection = { ReceiverDirection + Right * (StaticDisk[i].x * PenumbraRadiusWorld) - Up * (StaticDisk[i].y * PenumbraRadiusWorld) };
+        const uint SampleFaceIndex = { GetPointShadowFaceIndex(SampleDirection) };
+        const FShadowMapRenderParameters SampleParameters = { ShadowMaps[FirstIndex + SampleFaceIndex] };
+        const float3 SamplePosition = { Light.Position + SampleDirection * (ReceiverDistance * rsqrt(dot(SampleDirection, SampleDirection))) };
+        const float4 SampleClip = { mul(float4(SamplePosition, 1.0f), SampleParameters.mLightViewProjection) };
+        Visibility += SamplePointShadow(SampleParameters, SampleClip);
+    }
+    return Visibility / PCSS_SAMPLES;
+
 #else
     return SamplePointShadow(Parameters, LightClip);
 #endif
@@ -302,7 +463,7 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
     const float3 Radiance = { Light.Color * Light.Intensity };
     FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
+    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N, 0.5357) }; // Todo : 고정된 Source Angle 가변 가능하게 수정
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif
@@ -399,7 +560,9 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N) : CastShadow(Light.mShadowIndex, WorldPos, N) };
+    const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N, 0.05) :
+        Light.Type == LIGHT_TYPE_SPOT ? CastShadow(Light.mShadowIndex, WorldPos, N, 0.05) :
+        Light.Type == LIGHT_TYPE_RECT ? CastShadow(Light.mShadowIndex, WorldPos, N, 32.00) : 1.0 }; // Todo : 고정값 수정하기
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif

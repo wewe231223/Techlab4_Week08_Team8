@@ -18,6 +18,15 @@ constexpr uint32 PointShadowFaceCount{ 6 };
 
 int32 NormalizeShadowMapResolution(int32 Resolution);
 
+enum class EShadowFilterMode : int32 {
+	None,
+	PCF,
+	PCSS,
+	Count
+};
+
+EShadowFilterMode NormalizeShadowFilterMode(int32 Mode);
+
 enum class EShadowDepthBiasPreset : int32 {
 	None,
 	Low,

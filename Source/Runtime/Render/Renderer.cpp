@@ -516,7 +516,7 @@ void FRenderer::EndObjectConstants()
 void FRenderer::BindMaterial(UMaterial* Material) {
 	FShaderProgram* Program{ Material->Shader };
 	if (FRenderResourceManager::IsUberLitProgram(Program)) {
-		if (FShaderProgram* Variant{ FRenderResourceManager::GetUberLitProgram(CurrentViewMode, mShadowRenderer.IsShadowPcfEnabled()) }) {
+		if (FShaderProgram* Variant{ FRenderResourceManager::GetUberLitProgram(CurrentViewMode, mShadowRenderer.GetShadowFilterMode()) }) {
 			Program = Variant;
 		}
 	}

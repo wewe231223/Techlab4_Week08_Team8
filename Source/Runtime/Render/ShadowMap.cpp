@@ -9,6 +9,10 @@ namespace {
 	constexpr FShadowSlopeScaledDepthBiasPreset ShadowSlopeScaledDepthBiasPresets[ShadowSlopeScaledDepthBiasPresetCount]{ { "None (0)", 0.0f }, { "Low (0.5)", 0.5f }, { "Medium (1)", 1.0f }, { "High (2)", 2.0f }, { "Very High (4)", 4.0f }, { "Low / 16 (0.03125)", 0.03125f }, { "Low / 8 (0.0625)", 0.0625f }, { "Low / 4 (0.125)", 0.125f }, { "Low / 2 (0.25)", 0.25f }, { "Low-Medium (0.625)", 0.625f }, { "Below Medium (0.75)", 0.75f }, { "Medium-High (1.5)", 1.5f }, { "High-Very High (3)", 3.0f } };
 }
 
+EShadowFilterMode NormalizeShadowFilterMode(int32 Mode) {
+	return Mode >= 0 && Mode < static_cast<int32>(EShadowFilterMode::Count) ? static_cast<EShadowFilterMode>(Mode) : EShadowFilterMode::None;
+}
+
 EShadowDepthBiasPreset NormalizeShadowDepthBiasPreset(int32 Preset) {
 	return Preset >= 0 && Preset < ShadowDepthBiasPresetCount ? static_cast<EShadowDepthBiasPreset>(Preset) : EShadowDepthBiasPreset::Medium;
 }

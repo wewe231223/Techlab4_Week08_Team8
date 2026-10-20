@@ -308,7 +308,7 @@ TUniquePtr<FComputeShader> FRenderDevice::CreateComputeShader(const FShaderByteC
 	//}
 
 	//hr = Device->CreateVertexShader(VertexShaderCSO->GetBufferPointer(), VertexShaderCSO->GetBufferSize(), nullptr, Shader->VertexShader.GetAddressOf());
-
+ 
 	//ID3DBlob* PixelShaderCSO;
 	//D3DCompileFromFile(FileName, nullptr, nullptr, "mainPS", "ps_5_0", 0, 0, &PixelShaderCSO, nullptr);
 	//Device->CreatePixelShader(PixelShaderCSO->GetBufferPointer(), PixelShaderCSO->GetBufferSize(), nullptr, Shader->PixelShader.GetAddressOf());

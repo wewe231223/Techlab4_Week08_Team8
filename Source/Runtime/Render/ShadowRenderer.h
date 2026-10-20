@@ -52,8 +52,8 @@ public:
 	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = mDefaultAtlasResolution);
 	void Reset();
 	void BindShadowMaps();
-	void SetShadowPcfEnabled(bool Enabled);
-	bool IsShadowPcfEnabled() const;
+	void SetShadowFilterMode(EShadowFilterMode Mode);
+	EShadowFilterMode GetShadowFilterMode() const;
 	FTexture2D* GetShadowDepthTexture() const;
 	uint32 GetShadowMapCount() const;
 	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
@@ -95,5 +95,5 @@ private:
 	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
 	TMap<const ULightComponent*, FShadowMapAllocation> mShadowMapAllocations{};
 	bool mShadowMapReady{};
-	bool mShadowPcfEnabled{};
+	EShadowFilterMode mShadowFilterMode{ EShadowFilterMode::None };
 };
