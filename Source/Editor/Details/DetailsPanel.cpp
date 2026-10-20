@@ -1009,12 +1009,20 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		ImGui::TextDisabled(LightComponent->CastsShadows() ? "Shadow map is not allocated in the last rendered view." : "Cast Shadows is disabled.");
 		return;
 	}
-	if (ViewCount == PointShadowFaceCount) {
+	ELightType LightType = LightComponent->GetLightType();
+	if (LightType == ELightType::Point && ViewCount == PointShadowFaceCount) {
 		const char* FaceNames[PointShadowFaceCount]{ "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
 		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, static_cast<int32>(PointShadowFaceCount) - 1);
 		ImGui::Combo("Shadow Face", &mShadowPreviewFace, FaceNames, static_cast<int32>(PointShadowFaceCount));
 	}
-	const uint32 FaceIndex{ ViewCount == PointShadowFaceCount ? static_cast<uint32>(mShadowPreviewFace) : 0 };
+	if (LightType == ELightType::Directional && ViewCount > 1)
+	{
+		const char* CascadeNames[]{ "Cascade 0 (Near)", "Cascade 1", "Cascade 2", "Cascade 3", "Cascade 4", "Cascade 5" };
+		const int32 MaxCascades = static_cast<int32>(ViewCount);
+		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, MaxCascades - 1);
+		ImGui::Combo("Shadow Face", &mShadowPreviewFace, CascadeNames, MaxCascades);
+	}
+	const uint32 FaceIndex = (ViewCount > 1) ? static_cast<uint32>(mShadowPreviewFace) : 0;
 	const FShadowMapRenderParameters* Parameters{ mShadowRenderer->GetShadowMapRenderParameters(LightComponent, FaceIndex) };
 	if (!Parameters) {
 		return;

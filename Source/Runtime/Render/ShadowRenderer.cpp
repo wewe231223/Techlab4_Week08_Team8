@@ -375,11 +375,17 @@ void FShadowRenderer::GatherShadowRequests(const FScene& Scene) {
 				// 함수 하나에서 호출한뒤에 분기하는 방식으로 변경하기
 				if (!Proxy->IsCSMEnabled()) 
 				{
-					Proxy->BuildShadowView(CasterBounds, Request.mViews[0]);
+					if (!Proxy->BuildShadowView(CasterBounds, Request.mViews[0]))
+					{
+						continue;
+					}
 				}
 				else
 				{
-					Proxy->BuildShadowViews(CasterBounds, Request.mViews, CurrentCameraContext);
+					if (!Proxy->BuildShadowViews(CasterBounds, Request.mViews, CurrentCameraContext))
+					{
+						continue;
+					}
 					Request.mViewCount = Proxy->GetCascadeCount();
 				}
 				Request.mSettings = Proxy->GetShadowSettings();

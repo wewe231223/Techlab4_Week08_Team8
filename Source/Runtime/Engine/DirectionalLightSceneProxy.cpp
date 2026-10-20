@@ -38,6 +38,10 @@ bool FDirectionalLightSceneProxy::BuildShadowViews(const FBox& CasterBounds, FSh
 	}
 	const FTransform LightTransform{ LightComponent->GetWorldRotation(), LightComponent->GetWorldLocation() };
 
+	int32 CascadeCount = GetCascadeCount();
+	float MaxShadowDistance = GetMaxShadowDistance();
+	float SplitLambda = GetSplitLambda();
+
 	// 월드 상에서 카메라 Frustum의 Near평면, Far 평면 
 	TArray<FVector> CamFrustumNearPoints;
 	TArray<FVector> CamFrustumFarPoints;
@@ -65,7 +69,7 @@ bool FDirectionalLightSceneProxy::BuildShadowViews(const FBox& CasterBounds, FSh
 
 	}
 
-	// CascadeCount에 따른 메인 카메라  분할 비율 구한다
+	// CascadeCount에 따른 메인 카메라 분할 비율 구한다
 	float ShadowFar = std::min(MaxShadowDistance, CamContext.FarZ);
 	float ShadowNear = CamContext.NearZ;
 

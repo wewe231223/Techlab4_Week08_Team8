@@ -11,14 +11,6 @@ struct FBox;
 class FDirectionalLightSceneProxy : public FLightSceneProxy
 {
 public:
-	FDirectionalLightSceneProxy(const UDirectionalLightComponent* InComponent)
-		:FLightSceneProxy(InComponent)
-	{
-		bEnableCSM = InComponent->IsCSMEnabled();
-		CascadeCount = InComponent->GetCascadeCount();
-		MaxShadowDistance = InComponent->GetMaxShadowDistance();
-		SplitLambda = InComponent->GetSplitLambda();
-	}
 	using FLightSceneProxy::FLightSceneProxy;
 	void GetLightShaderParameters(FLightRenderParameters& Out) const override;
 	bool BuildShadowView(const FBox& CasterBounds, FShadowView& OutView) const;
@@ -27,13 +19,25 @@ public:
 	// CSM 단계 조절 추가
 	bool BuildShadowViews(const FBox& CasterBounds, FShadowView(&OutViews)[PointShadowFaceCount], const FShadowCameraContext& CamContext) const;
 
-	bool IsCSMEnabled() const { return bEnableCSM; }
-	int32 GetCascadeCount() const { return CascadeCount; }
-	float GetMaxShadowDistance() const { return MaxShadowDistance; }
-	float GetSplitLambda() const { return SplitLambda; }
+	bool IsCSMEnabled() const 
+	{ 
+		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
+		return Dir ? Dir->IsCSMEnabled() : false;
+	}
+	int32 GetCascadeCount() const 
+	{
+		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
+		return Dir ? Dir->GetCascadeCount() : 2;
+	}
+	float GetMaxShadowDistance() const 
+	{
+		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
+		return Dir ? Dir->GetMaxShadowDistance() : 150.0f;
+	}
+	float GetSplitLambda() const 
+	{
+		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
+		return Dir ? Dir->GetSplitLambda() : 0.85f;
+	}
 private:
-	bool bEnableCSM = false;
-	int32 CascadeCount = 3;
-	float MaxShadowDistance = 150.0f;
-	float SplitLambda = 0.85f;
 };

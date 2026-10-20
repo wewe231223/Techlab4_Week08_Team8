@@ -31,9 +31,11 @@ public:
 	float GetSplitLambda() const { return SplitLambda; }
 	void SetSplitLambda(float InSplitLambda) { SplitLambda = InSplitLambda; }
 
+	virtual void PostEditChangeProperty(const FProperty& Property) override;
+
 private:
 	bool bEnableCSM = false;
 	int32 CascadeCount = 3;
-	float MaxShadowDistance = 10000.0f;
+	float MaxShadowDistance = 150.0f;
 	float SplitLambda = 0.85f;
 };
