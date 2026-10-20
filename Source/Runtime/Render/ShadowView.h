@@ -5,6 +5,7 @@
 #include "ShadowMap.h"
 
 class ULightComponent;
+class FLightSceneProxy;
 struct FBox;
 struct FTransform;
 
@@ -38,6 +39,8 @@ struct FShadowMapRequest {
 	FLightShadowSettings mSettings{};
 	// 요청을 만든 조명을 식별하는 비소유 포인터. 생성된 그림자 데이터의 시작 인덱스와 뷰 수를 조명별로 저장하고 조회하는 키로 사용한다.
 	const ULightComponent* mLightComponent{};
+	// 맵별 Caster 목록과 재사용 조건 평가를 담당하는 비소유 프록시.
+	FLightSceneProxy* mLightProxy{};
 };
 
 bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView);

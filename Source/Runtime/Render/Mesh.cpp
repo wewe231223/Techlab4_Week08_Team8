@@ -33,6 +33,8 @@ size_t UStaticMesh::FMaterialSlotsHash::operator()(const std::vector<UMaterial*>
 
 void UStaticMesh::RebuildRenderData()
 {
+    ++mRenderDataRevision;
+
     RenderBounds = MeshData.AABB;
     for (const auto& LOD : AdditionalLODs)
     {
@@ -60,6 +62,10 @@ void UStaticMesh::RebuildRenderData()
     RenderStates.clear();
     for (FPrimitiveSceneProxy* Proxy : RenderProxies)
         Proxy->OnMeshRenderDataChanged();
+}
+
+uint64 UStaticMesh::GetRenderDataRevision() const {
+	return mRenderDataRevision;
 }
 
 TSharedPtr<const FMeshRenderState> UStaticMesh::GetRenderState(const std::vector<UMaterial*>& Materials)

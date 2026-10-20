@@ -20,6 +20,7 @@ class FTexture2DArray;
 class FPrimitiveSceneProxy;
 class ULightComponent;
 struct FBox;
+struct FRenderingInfo;
 
 class FShadowRenderer {
 private:
@@ -47,6 +48,8 @@ public:
 	void BindShadowMaps();
 	void SetShadowPcfEnabled(bool Enabled);
 	bool IsShadowPcfEnabled() const;
+	void SetShadowCacheEnabled(bool Enabled);
+	bool IsShadowCacheEnabled() const;
 	FTexture2DArray* GetShadowDepthTexture() const;
 	uint32 GetShadowMapCount() const;
 	const TArray<FShadowMapRenderParameters>& GetShadowMapRenderParameters() const;
@@ -60,16 +63,21 @@ public:
 private:
 	static bool IsValidShadowView(const FShadowView& View);
 	static bool IsValidShadowRequest(const FShadowMapRequest& Request);
-	static bool IsShadowCaster(const FPrimitiveSceneProxy* Proxy);
 	static int32 NormalizeAtlasResolution(int32 Resolution);
 	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(FShadowAtlas& Atlas, const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution);
 	static bool GatherShadowCasterBounds(const FScene& Scene, FBox& OutBounds);
-	static void GatherShadowCasters(FScene& Scene, FRenderQueue& OutQueue, const FShadowView& View, int32 Resolution);
 	bool InitializeShadowPass();
 	bool InitializeComparisonSampler();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
-	bool DrawShadowCasters(FScene& Scene, const FShadowView& View, const FShadowAtlasTile& Tile, FShadowCacheEntry& OutEntry);
+	void ConfigureShadowCache(FScene& Scene, const TArray<FShadowMapRequest>& Requests);
+	void BeginShadowPass(const FRenderingInfo& PassInfo);
+	void RenderLightShadowMaps(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation);
+	void UpdateLightShadowMaps(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, FShadowAtlas& Atlas, const FRenderingInfo& PassInfo, bool& PassStarted, uint64 UpdateSerial);
+	void AddShadowMapParameters(const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, const FShadowView* Views);
+	bool DrawShadowCasters(const FRenderQueue& Queue, const FShadowView& View, const FShadowAtlasTile& Tile);
+	bool InitializeShadowClear();
+	void ClearShadowTile(const FShadowAtlasTile& Tile);
 	FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const;
 	bool InitializePreviewPass();
 	void RenderShadowPreview();
@@ -84,6 +92,7 @@ private:
 
 	static constexpr uint32 mPreviewResolution{ 512 };
 
+	// Scene의 Atlas가 소유하는 깊이 텍스처의 비소유 참조.
 	TWeakPtr<FTexture2DArray> mDepthTexture{};
 
 	//Preview : LightComponent ShadowMap Preview
@@ -100,10 +109,17 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11SamplerState> mComparisonSampler{};
 	FShadowRasterizerStateCache mShadowRasterizerStates{};
 	FShaderProgram* mShadowShader{};
+	// 다른 타일을 보존하면서 갱신할 타일만 초기화하는 전용 셰이더와 상태.
+	FShaderProgram* mShadowClearShader{};
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mShadowClearDepthState{};
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mShadowClearRasterizerState{};
 	TArray<FShadowMapRequest> mShadowRequests{};
+	// 현재 그림자 맵을 그릴 드로우 패킷.
 	FRenderQueue mShadowRenderQueue{};
 	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
 	TMap<const ULightComponent*, FShadowMapAllocation> mShadowMapAllocations{};
 	bool mShadowMapReady{};
 	bool mShadowPcfEnabled{};
+	// OFF에서는 Caster 변경 추적과 재사용 평가를 건너뛴다.
+	bool mShadowCacheEnabled{ true };
 };

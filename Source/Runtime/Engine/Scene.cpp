@@ -55,6 +55,7 @@ void FScene::RemovePrimitive(UPrimitiveComponent* Component)
 		if (Found != INDEX_NONE) RenderStateDirtyProxies.RemoveAtSwap(Found);
 	}
 
+	RemoveShadowCaster(Proxy);
 	Component->SceneProxy = nullptr;
 	delete Proxy;
 
@@ -63,6 +64,9 @@ void FScene::RemovePrimitive(UPrimitiveComponent* Component)
 
 void FScene::RemoveAllPrimitives()
 {
+	if (mShadowAtlas.IsCacheEnabled()) {
+		ResetShadowCasterTracking();
+	}
 	// 하나씩 RemovePrimitive하면 대기열 검색(Find)이 물체 수만큼 반복되므로 통째로 비운다.
 	for (FPrimitiveSceneProxy* Proxy : PrimitiveSceneProxies)
 	{
@@ -385,4 +389,37 @@ void FScene::MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy)
 	if (!Proxy || Proxy->bRenderStateQueued) return;
 	Proxy->bRenderStateQueued = true;
 	RenderStateDirtyProxies.Add(Proxy);
+}
+
+uint64 FScene::BeginShadowUpdate() {
+	return ++mShadowUpdateSerial;
+}
+
+void FScene::RemoveShadowCaster(const FPrimitiveSceneProxy* Caster) {
+	if (!mShadowAtlas.IsCacheEnabled()) {
+		return;
+	}
+
+	for (FLightSceneProxy* Proxy : DirectionalLightProxies) {
+		Proxy->RemoveShadowCaster(Caster, mShadowAtlas);
+	}
+	for (FLightSceneProxy* Proxy : LocalLightProxies) {
+		Proxy->RemoveShadowCaster(Caster, mShadowAtlas);
+	}
+}
+
+void FScene::ResetShadowCasterTracking() {
+	for (FPrimitiveSceneProxy* Proxy : PrimitiveSceneProxies) {
+		Proxy->ResetShadowTracking();
+	}
+	for (FLightSceneProxy* Proxy : DirectionalLightProxies) {
+		Proxy->ResetShadowMaps();
+		mShadowAtlas.InvalidateCacheEntry(Proxy->GetLightComponent(), 0);
+	}
+	for (FLightSceneProxy* Proxy : LocalLightProxies) {
+		Proxy->ResetShadowMaps();
+		for (uint32 FaceIndex{}; FaceIndex < PointShadowFaceCount; ++FaceIndex) {
+			mShadowAtlas.InvalidateCacheEntry(Proxy->GetLightComponent(), FaceIndex);
+		}
+	}
 }

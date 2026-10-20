@@ -60,6 +60,7 @@ public:
     }
 
     void RebuildRenderData();
+    uint64 GetRenderDataRevision() const;
     const FLODSphere& GetLocalLODSphere() const { return LocalLODSphere; }
     const FBox& GetRenderBounds() const { return RenderBounds; }
     TSharedPtr<const FMeshRenderState> GetRenderState(const std::vector<UMaterial*>& Materials);
@@ -77,4 +78,6 @@ private:
     FBox RenderBounds;
     std::unordered_map<std::vector<UMaterial*>, TWeakPtr<const FMeshRenderState>, FMaterialSlotsHash> RenderStates;
     TArray<FPrimitiveSceneProxy*> RenderProxies;
+    // RebuildRenderData에서 증가하며 Primitive의 그림자 변경 감지에 사용한다.
+    uint64 mRenderDataRevision{};
 };
