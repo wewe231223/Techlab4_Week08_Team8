@@ -20,6 +20,7 @@ struct FShadowView {
 	FVector mWorldPosition{};
 	// 그림자 카메라에서 근평면까지의 전방 거리. 투영 행렬의 깊이 범위와 일치해야 하며, LOD 계산과 뷰 유효성 검사에 사용한다.
 	float mNearPlane{};
+	float mFarPlane{};
 	// LOD 계산에 직교 투영 방식을 사용할지 여부. 방향성 조명은 true, 나머지는 false이며, 이 값 자체가 투영 행렬을 변경하지는 않는다.
 	bool mIsOrthographic{ true };
 	// 포인트 라이트의 전방향 그림자를 구성하는 뷰인지 여부. LOD 계산 시 각 면의 전방 대신 광원에서 물체로 향하는 방향을 사용한다.

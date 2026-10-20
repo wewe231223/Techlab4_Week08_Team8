@@ -15,6 +15,7 @@ public:
 	URectLightComponent();
 	virtual ~URectLightComponent() override;
 	virtual FLightSceneProxy* CreateSceneProxy() const override;
+	virtual FLightShadowSettings GetShadowSettings() const override;
 
 	ELightType GetLightType() const { return ELightType::Rect; }
 	void DrawDebug(FLineBatcher* LineBatcher) const;

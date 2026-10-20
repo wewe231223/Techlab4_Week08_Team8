@@ -59,6 +59,7 @@ namespace {
 		}
 		Result.mWorldPosition = Position;
 		Result.mNearPlane = NearPlane;
+		Result.mFarPlane = FarPlane;
 		OutView = Result;
 		return true;
 	}

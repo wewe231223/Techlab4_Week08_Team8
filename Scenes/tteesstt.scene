@@ -15,7 +15,7 @@
                                     "Location": {
                                         "X": -0.2699594497680664,
                                         "Y": 0.039142608642578125,
-                                        "Z": -1.086517572402954
+                                        "Z": -0.228499174118042
                                     },
                                     "Rotation": {
                                         "Pitch": 0.0,
@@ -72,9 +72,9 @@
                             "Properties": {
                                 "Transform": {
                                     "Location": {
-                                        "X": 0.26676392555236816,
-                                        "Y": 0.03772306442260742,
-                                        "Z": -0.3788738250732422
+                                        "X": -0.22015583515167236,
+                                        "Y": -0.5135717988014221,
+                                        "Z": 0.18201708793640137
                                     },
                                     "Rotation": {
                                         "Pitch": 9.272375106811523,
@@ -122,7 +122,7 @@
                     "Properties": {}
                 },
                 {
-                    "Class": "ARectLightActor",
+                    "Class": "ASpotLightActor",
                     "Components": [
                         {
                             "Class": "USceneComponent",
@@ -149,25 +149,24 @@
                             }
                         },
                         {
-                            "Class": "URectLightComponent",
-                            "Name": "URectLightComponent",
+                            "Class": "USpotLightComponent",
+                            "Name": "USpotLightComponent",
                             "Parent": "",
                             "Properties": {
-                                "AttenuationRadius": 21.899999618530273,
-                                "BarnDoorAngle": 88.0,
-                                "BarnDoorLength": 2.0,
-                                "HalfHeight": 0.699999988079071,
-                                "HalfWidth": 4.5,
+                                "AttenuationRadius": 19.399999618530273,
+                                "InnerConeAngle": 23.0,
                                 "Intensity": 1.0,
                                 "LightColor": 4294967295,
+                                "LightFalloffExponent": 1.0,
+                                "OuterConeAngle": 51.70000076293945,
                                 "Transform": {
                                     "Location": {
-                                        "X": -2.5161566734313965,
-                                        "Y": -0.9876899719238281,
-                                        "Z": 3.1072335243225098
+                                        "X": -3.5143027305603027,
+                                        "Y": -1.2041749954223633,
+                                        "Z": 3.43391752243042
                                     },
                                     "Rotation": {
-                                        "Pitch": 34.09441375732422,
+                                        "Pitch": 24.519590377807617,
                                         "Roll": 0.0,
                                         "Yaw": 0.0
                                     },
@@ -179,10 +178,10 @@
                                 },
                                 "bVisible": true,
                                 "mCastShadows": true,
-                                "mShadowDepthBiasPreset": 5,
+                                "mShadowDepthBiasPreset": 8,
                                 "mShadowMapResolution": 2048,
                                 "mShadowNormalBias": 0.20000000298023224,
-                                "mShadowSlopeScaledDepthBiasPreset": 5
+                                "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
                         {
@@ -201,7 +200,7 @@
                                     "SamplerState": "LinearClamp",
                                     "Shininess": 32.0,
                                     "Textures": [
-                                        "Assets/Icons/Rect.png"
+                                        "Assets/Icons/Spot.png"
                                     ],
                                     "UVScrollSpeed": [
                                         0.0,
@@ -210,7 +209,7 @@
                                 }
                             },
                             "Name": "UBillboardComponent",
-                            "Parent": "URectLightComponent",
+                            "Parent": "USpotLightComponent",
                             "Properties": {
                                 "Transform": {
                                     "Location": {
@@ -242,7 +241,7 @@
                                     "Asset": "EditorArrowMaterial"
                                 }
                             ],
-                            "Parent": "URectLightComponent",
+                            "Parent": "USpotLightComponent",
                             "Properties": {
                                 "StaticMesh": "Arrow",
                                 "Transform": {

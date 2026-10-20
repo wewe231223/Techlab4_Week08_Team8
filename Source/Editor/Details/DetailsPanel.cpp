@@ -27,6 +27,7 @@
 #include "Core/EngineLog.h"
 
 #include <algorithm>
+#include <cfloat>
 
 
 namespace
@@ -666,6 +667,13 @@ namespace
 		const FString Label = "##" + Property.Name;
 
 		const char* DisplayName = Property.Name.c_str();
+		if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
+			DisplayName = "Min Caster Depth";
+		} else if (Property.Name == "SourceAngle" && Cast<UDirectionalLightComponent>(Object)) {
+			DisplayName = "Source Angle (deg)";
+		} else if (Property.Name == "SourceRadius" && Cast<UPointLightComponent>(Object)) {
+			DisplayName = "Source Radius";
+		}
 
 		// 패널이 넓으면 라벨 | 값을 한 줄에, 좁거나 라벨이 길면 라벨 아래 줄에 값을 놓는다.
 		const float StartX = ImGui::GetCursorPosX();
@@ -687,7 +695,24 @@ namespace
 		switch (Property.Type)
 		{
 		case EPropertyType::Float:
-			bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.01f, 0.001f, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("PCSS search minimum depth in light-view world units. Does not change the clipping near plane.\nLarger values reduce the search area but can miss nearby blockers.");
+				}
+			} else if (Property.Name == "SourceAngle" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.01f, 0.0f, 179.0f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Angular diameter of the directional light source in degrees. 0 gives hard shadows.");
+				}
+			} else if (Property.Name == "SourceRadius" && Cast<UPointLightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.005f, 0.0f, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Radius of the light source in world units. Controls PCSS softness, independently of attenuation radius.\n0 gives hard shadows.");
+				}
+			} else {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			}
 			break;
 		case EPropertyType::Int:
 			if (Property.Name == "mShadowMapResolution" && Cast<ULightComponent>(Object)) {

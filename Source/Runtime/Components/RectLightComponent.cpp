@@ -1,8 +1,15 @@
 #include "EnginePCH.h"
 #include "RectLightComponent.h"
+
 #include "Render/LineBatcher.h"
 
 #include "Engine/RectLightSceneProxy.h"
+
+FLightShadowSettings URectLightComponent::GetShadowSettings() const {
+	FLightShadowSettings Settings{ Super::GetShadowSettings() };
+	Settings.mSourceRadius = FVector2{ NormalizeShadowSourceRadius(HalfWidth), NormalizeShadowSourceRadius(HalfHeight) };
+	return Settings;
+}
 
 URectLightComponent::URectLightComponent() {}
 URectLightComponent::~URectLightComponent() {}

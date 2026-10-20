@@ -8,6 +8,25 @@
 UPointLightComponent::UPointLightComponent() : LightFalloffExponent(1.0f) {}
 UPointLightComponent::~UPointLightComponent() {}
 
+void UPointLightComponent::PostEditChangeProperty(const FProperty& Property) {
+	Super::PostEditChangeProperty(Property);
+	SetSourceRadius(SourceRadius);
+}
+
+FLightShadowSettings UPointLightComponent::GetShadowSettings() const {
+	FLightShadowSettings Settings{ Super::GetShadowSettings() };
+	Settings.mSourceRadius = FVector2{ GetSourceRadius(), GetSourceRadius() };
+	return Settings;
+}
+
+float UPointLightComponent::GetSourceRadius() const {
+	return NormalizeShadowSourceRadius(SourceRadius);
+}
+
+void UPointLightComponent::SetSourceRadius(float Radius) {
+	SourceRadius = NormalizeShadowSourceRadius(Radius);
+}
+
 FLightSceneProxy* UPointLightComponent::CreateSceneProxy() const
 {
     return new FPointLightSceneProxy(this);
