@@ -17,6 +17,7 @@ class FStructuredBuffer;
 class FTexture2D;
 class FPrimitiveSceneProxy;
 class ULightComponent;
+class FVarianceShadowMap;
 struct FBox;
 
 class FShadowRenderer {
@@ -84,6 +85,7 @@ private:
 	static constexpr uint32 mBufferSlot{ 14 };
 	static constexpr uint32 mSamplerSlot{ 1 };
 	TUniquePtr<FTexture2D> mDepthTexture{};
+	TUniquePtr<FVarianceShadowMap> mVarianceShadowMap{};
 	TUniquePtr<FStructuredBuffer> mShadowMapBuffer{};
 	TUniquePtr<FConstantBuffer> mShadowViewCB{};
 	TUniquePtr<FConstantBuffer> mShadowObjectCB{};

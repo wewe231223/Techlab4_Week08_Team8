@@ -11,12 +11,14 @@
 #include "RenderResourceManager.h"
 #include "Shader.h"
 #include "Texture2D.h"
+#include "VarianceShadowMap.h"
 
 #include <algorithm>
 #include <bit>
 #include <cmath>
 
 FShadowRenderer::FShadowRenderer() {
+	mVarianceShadowMap = MakeUnique<FVarianceShadowMap>();
 }
 
 FShadowRenderer::~FShadowRenderer() {
@@ -32,6 +34,7 @@ void FShadowRenderer::Reset() {
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
 	mShadowMapReady = false;
+	mVarianceShadowMap->ReleaseBuffers();
 }
 
 void FShadowRenderer::SetShadowFilterMode(EShadowFilterMode Mode) {
@@ -233,6 +236,7 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 		ParameterCount += Allocation.mViewCount;
 	}
 	if (ParameterCount == 0 || !InitializeShadowPass() || !InitializeAtlasResource(static_cast<int32>(Size))) {
+		mVarianceShadowMap->ReleaseBuffers();
 		return false;
 	}
 	if (!mShadowMapBuffer || mShadowMapBuffer->GetMaxCount() < ParameterCount) {
@@ -277,12 +281,18 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	}
 	RenderCommand::EndRenderPass(PassInfo);
 	if (mShadowMapReady) {
+		if (mShadowFilterMode == EShadowFilterMode::VSSM) {
+			mVarianceShadowMap->Build(mDepthTexture->GetSRV(), mShadowMapRenderParameters);
+		} else {
+			mVarianceShadowMap->ReleaseBuffers();
+		}
 		RenderCommand::UpdateBufferData(mShadowMapBuffer.get(), mShadowMapRenderParameters.GetData(), mShadowMapRenderParameters.Num() * sizeof(FShadowMapRenderParameters));
 	}
 	return mShadowMapReady;
 }
 
 void FShadowRenderer::BindShadowMaps() {
+	mVarianceShadowMap->Bind();
 	if (FTexture2D* Texture{ GetShadowDepthTexture() }) {
 		RenderCommand::BindShaderResource(mTextureSlot, Texture, EShaderBindFlagBits::Pixel);
 	} else {

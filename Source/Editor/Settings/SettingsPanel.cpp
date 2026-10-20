@@ -44,10 +44,19 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
 	ImGui::Checkbox("FXAA", &Settings.bEnableFXAA);
 	int ShadowFilterMode = static_cast<int>(Settings.mShadowFilterMode);
-	if (ImGui::Combo("Shadow Filter", &ShadowFilterMode, "None\0PCF\0PCSS\0"))
+	if (ImGui::Combo("Shadow Filter", &ShadowFilterMode,
+		"None\0PCF\0PCSS\0"
+		// "VSSM\0" // 셰이더 컴파일과 함께 임시 비활성화.
+	))
 	{
 		Settings.mShadowFilterMode = NormalizeShadowFilterMode(ShadowFilterMode);
 	}
+	/* VSSM 옵션을 다시 활성화할 때 툴팁도 복원한다.
+	if (Settings.mShadowFilterMode == EShadowFilterMode::VSSM && ImGui::IsItemHovered())
+	{
+		ImGui::SetTooltip("Area statistics with adaptive filtering. Compare with PCSS using the same light size.\nPoint-light cube seams use PCSS.");
+	}
+	*/
 	ImGui::SliderFloat("Exposure", &Settings.Exposure, 0.1f, 5.0f, "%.2f");
 	ImGui::Checkbox("Depth View", &Settings.bDepthView);
 	ImGui::Checkbox("Exponential Height Fog", &Settings.bExponentialHeightFog);
@@ -260,7 +269,7 @@ bool FSettingsPanel::LoadSettings()
 					int32 Mode;
 					if (Number >> Mode && Mode >= 0 && Mode < static_cast<int32>(EShadowFilterMode::Count))
 					{
-						Settings.mShadowFilterMode = static_cast<EShadowFilterMode>(Mode);
+						Settings.mShadowFilterMode = NormalizeShadowFilterMode(Mode);
 						HasShadowFilterMode = true;
 					}
 				}

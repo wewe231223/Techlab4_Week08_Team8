@@ -53,13 +53,20 @@ void FRenderResourceManager::LoadUberLit(const fs::path& ShaderRoot) {
 	UberLitDefault = DefaultProgram ? DefaultProgram->get() : nullptr;
 	const char* ModelDefines[]{ "LIGHTING_MODEL_GOURAUD", "LIGHTING_MODEL_LAMBERT", "LIGHTING_MODEL_BLINN_PHONG", "LIGHTING_MODEL_UNLIT", "WORLD_NORMAL" };
 	static_assert(std::size(ModelDefines) == static_cast<size_t>(EViewMode::Count));
-	for (int32 FilterIndex{}; FilterIndex < static_cast<int32>(EShadowFilterMode::Count); ++FilterIndex) {
-		const EShadowFilterMode FilterMode{ static_cast<EShadowFilterMode>(FilterIndex) };
+	const EShadowFilterMode FilterModes[]{
+		EShadowFilterMode::None,
+		EShadowFilterMode::PCF,
+		EShadowFilterMode::PCSS,
+		// EShadowFilterMode::VSSM, // 초기 셰이더 컴파일 비용 때문에 임시 비활성화.
+	};
+	for (EShadowFilterMode FilterMode : FilterModes) {
+		const int32 FilterIndex{ static_cast<int32>(FilterMode) };
 		for (int32 ModeIndex{}; ModeIndex < static_cast<int32>(EViewMode::Count); ++ModeIndex) {
 			const D3D_SHADER_MACRO Macros[]{
 				{ ModelDefines[ModeIndex], "1" },
 				{ "SHADOW_PCF", FilterMode == EShadowFilterMode::PCF ? "1" : "0" },
 				{ "SHADOW_PCSS", FilterMode == EShadowFilterMode::PCSS ? "1" : "0" },
+				// { "SHADOW_VSSM", FilterMode == EShadowFilterMode::VSSM ? "1" : "0" },
 				{ nullptr, nullptr }
 			};
 			LoadOrCompileShader(Path, Macros);

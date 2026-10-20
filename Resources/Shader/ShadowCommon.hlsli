@@ -5,7 +5,7 @@
 static const int InvalidShadowMapIndex = { -1 };
 static const uint PointShadowFaceCount = { 6 };
 
-// Render/ShadowMap.h의 FShadowMapRenderParameters와 동일한 128바이트 배치를 유지한다.
+// Render/ShadowMap.h의 FShadowMapRenderParameters와 동일한 144바이트 배치를 유지한다.
 struct FShadowMapRenderParameters {
     row_major float4x4 mLightViewProjection; // 월드 위치를 광원 클립 공간으로 변환한다. mul(WorldPosition, Matrix) 순서로 사용한다.
     float4 mUvScaleBias; // 아틀라스 UV = 0~1 그림자 UV * XY + ZW. XY는 크기, ZW는 시작 위치이다.
@@ -18,6 +18,10 @@ struct FShadowMapRenderParameters {
     float2 mSourceRadius; // 원근 광원의 월드 단위 발광면 반경.
     float mSourceAngleTanHalf; // 방향광의 tan(각지름 / 2).
     uint mIsOrthographic;
+    uint mVssmSatOffset;
+    uint mVssmMinMaxOffset;
+    uint mVssmResolution;
+    uint mVssmPadding;
 };
 
 uint GetPointShadowFaceIndex(float3 Direction) {

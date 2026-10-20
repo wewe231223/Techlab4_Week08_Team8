@@ -11,6 +11,11 @@ namespace {
 }
 
 EShadowFilterMode NormalizeShadowFilterMode(int32 Mode) {
+	// 저장된 VSSM 설정도 PCSS로 대체해 비활성화한 셰이더/통계 생성 경로가 실행되지 않게 한다.
+	// VSSM 재활성화 시 이 제한도 함께 제거한다.
+	if (Mode == static_cast<int32>(EShadowFilterMode::VSSM)) {
+		return EShadowFilterMode::PCSS;
+	}
 	return Mode >= 0 && Mode < static_cast<int32>(EShadowFilterMode::Count) ? static_cast<EShadowFilterMode>(Mode) : EShadowFilterMode::None;
 }
 

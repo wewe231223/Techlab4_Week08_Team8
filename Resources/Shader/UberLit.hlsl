@@ -11,6 +11,10 @@
 #define SHADOW_PCSS 0
 #endif
 
+#ifndef SHADOW_VSSM
+#define SHADOW_VSSM 0
+#endif
+
 #define LIGHT_TYPE_POINT 1   // C++ ELightType과 같아야 함
 #define LIGHT_TYPE_SPOT  2
 #define LIGHT_TYPE_RECT  3
@@ -214,6 +218,10 @@ struct FLightContribution
 };
 
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+#if SHADOW_VSSM
+#include "VssmShadow.hlsli"
+#endif
+
 float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal)
 {
     if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps)
@@ -251,7 +259,7 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal)
         }
     }
     return Visibility / 9.0f;
-#elif SHADOW_PCSS
+#elif SHADOW_PCSS || SHADOW_VSSM
     const float NearPlane = Parameters.mNearFar.x;
     const float FarPlane = Parameters.mNearFar.y;
     const bool IsOrthographic = Parameters.mIsOrthographic != 0;
@@ -262,6 +270,11 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal)
     }
 
     const float Receiver = IsOrthographic ? lerp(NearPlane, FarPlane, ComparisonDepth) : LightClip.w;
+#if SHADOW_VSSM
+    const float2 Gradient = VssmReceiverGradient(LightClip, Normal, Parameters);
+    const float VarianceVisibility = EvaluateVssmShadow(Parameters, ShadowUv, Receiver, Gradient, false);
+    [branch] if (VarianceVisibility >= 0.0f) return VarianceVisibility;
+#endif
     const float SearchMinDepth = clamp(Parameters.mMinCasterDepth, NearPlane, Receiver);
     const float4x4 M = Parameters.mLightViewProjection;
     const float2 ProjectionScale = float2(length(float3(M[0][0], M[1][0], M[2][0])), length(float3(M[0][1], M[1][1], M[2][1])));
@@ -373,7 +386,7 @@ float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Norm
         }
     }
     return Visibility / 9.0f;
-#elif SHADOW_PCSS
+#elif SHADOW_PCSS || SHADOW_VSSM
     const float SourceRadius = Parameters.mSourceRadius.x;
     if (SourceRadius <= 0.0f)
     {
@@ -381,6 +394,12 @@ float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Norm
     }
 
     const float ReceiverDistance = sqrt(DistanceSquared);
+#if SHADOW_VSSM
+    const float2 FaceUv = (LightClip.xy / LightClip.w) * float2(0.5f, -0.5f) + 0.5f;
+    const float2 Gradient = VssmReceiverGradient(LightClip, Normal, Parameters);
+    const float VarianceVisibility = EvaluateVssmShadow(Parameters, FaceUv, LightClip.w, Gradient, true);
+    [branch] if (VarianceVisibility >= 0.0f) return VarianceVisibility;
+#endif
     const float3 Right = float3(Parameters.mLightViewProjection[0][0], Parameters.mLightViewProjection[1][0], Parameters.mLightViewProjection[2][0]);
     const float3 Up = float3(Parameters.mLightViewProjection[0][1], Parameters.mLightViewProjection[1][1], Parameters.mLightViewProjection[2][1]);
     // 단위 큐브 투영에서 선택한 면의 전방 깊이 하한을 수신점 구면의 샘플 반경으로 변환한다.
@@ -500,6 +519,9 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
 
 FLightContribution AccumulateDirectionalLighting(float3 N, float3 V, float3 WorldPos, float InShininess) {
     FLightContribution Total = { (FLightContribution) 0 };
+#if SHADOW_VSSM
+    [loop]
+#endif
     for (uint Index = { 0 }; Index < NumDirectionalLights; ++Index) {
         const FLightContribution Contribution = { CalcDirectionalLight(DirectionalLights[Index], N, V, WorldPos, InShininess) };
         Total.Diffuse += Contribution.Diffuse;
@@ -588,9 +610,18 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+#if SHADOW_VSSM
+    float Visibility = 1.0f;
+    [branch] if (Light.Type == LIGHT_TYPE_POINT) {
+        Visibility = CastPointShadow(Light, WorldPos, N);
+    } else if (Light.Type == LIGHT_TYPE_SPOT || Light.Type == LIGHT_TYPE_RECT) {
+        Visibility = CastShadow(Light.mShadowIndex, WorldPos, N);
+    }
+#else
     const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N) :
         (Light.Type == LIGHT_TYPE_SPOT || Light.Type == LIGHT_TYPE_RECT) ? CastShadow(Light.mShadowIndex, WorldPos, N) : 1.0
     };
+#endif
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif
@@ -656,6 +687,9 @@ FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos,
         }
     }
 
+#if SHADOW_VSSM
+    [loop]
+#endif
     for (uint Index = 0; Index < LightCount; ++Index)
     {
         const uint LightIndex = bUseCellList ? CellLightIndices[CellOffset + 1 + Index] : Index;

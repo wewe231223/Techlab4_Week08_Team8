@@ -28,6 +28,7 @@ enum class EShadowFilterMode : int32 {
 	None,
 	PCF,
 	PCSS,
+	VSSM,
 	Count
 };
 
@@ -115,9 +116,13 @@ struct alignas(16) FShadowMapRenderParameters {
 	FVector2 mSourceRadius{};
 	float mSourceAngleTanHalf{}; // tan(SourceAngle / 2). 직교 PCSS의 거리 차를 반그림자 반경으로 변환한다.
 	uint32 mIsOrthographic{};
+	uint32 mVssmSatOffset{};
+	uint32 mVssmMinMaxOffset{};
+	uint32 mVssmResolution{}; // 0이면 통계 리소스가 없어 기존 PCSS로 대체한다.
+	uint32 mVssmPadding{};
 };
 
-static_assert(sizeof(FShadowMapRenderParameters) == 128);
+static_assert(sizeof(FShadowMapRenderParameters) == 144);
 static_assert(alignof(FShadowMapRenderParameters) == 16);
 static_assert(std::is_standard_layout_v<FShadowMapRenderParameters>);
 static_assert(std::is_trivially_copy_constructible_v<FShadowMapRenderParameters>);
@@ -129,3 +134,4 @@ static_assert(offsetof(FShadowMapRenderParameters, mTextureIndex) == 104);
 static_assert(offsetof(FShadowMapRenderParameters, mSourceRadius) == 112);
 static_assert(offsetof(FShadowMapRenderParameters, mSourceAngleTanHalf) == 120);
 static_assert(offsetof(FShadowMapRenderParameters, mIsOrthographic) == 124);
+static_assert(offsetof(FShadowMapRenderParameters, mVssmSatOffset) == 128);

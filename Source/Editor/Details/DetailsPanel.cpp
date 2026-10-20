@@ -698,7 +698,7 @@ namespace
 			if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.01f, 0.001f, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp);
 				if (ImGui::IsItemHovered()) {
-					ImGui::SetTooltip("PCSS search minimum depth in light-view world units. Does not change the clipping near plane.\nLarger values reduce the search area but can miss nearby blockers.");
+					ImGui::SetTooltip("PCSS/VSSM search minimum depth in light-view world units. Does not change the clipping near plane.\nLarger values reduce the search area but can miss nearby blockers.");
 				}
 			} else if (Property.Name == "SourceAngle" && Cast<UDirectionalLightComponent>(Object)) {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.01f, 0.0f, 179.0f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
@@ -708,7 +708,7 @@ namespace
 			} else if (Property.Name == "SourceRadius" && Cast<UPointLightComponent>(Object)) {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.005f, 0.0f, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp);
 				if (ImGui::IsItemHovered()) {
-					ImGui::SetTooltip("Radius of the light source in world units. Controls PCSS softness, independently of attenuation radius.\n0 gives hard shadows.");
+					ImGui::SetTooltip("Radius of the light source in world units. Controls PCSS/VSSM softness, independently of attenuation radius.\n0 gives hard shadows.");
 				}
 			} else {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
