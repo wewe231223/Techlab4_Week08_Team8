@@ -22,7 +22,8 @@ FShadowRenderer::FShadowRenderer() {
 FShadowRenderer::~FShadowRenderer() {
 }
 
-bool FShadowRenderer::Render(FScene& Scene, int32 AtlasResolution) {
+bool FShadowRenderer::Render(FScene& Scene, FShadowCameraContext& InCameraContext, int32 AtlasResolution) {
+	CurrentCameraContext = InCameraContext;
 	GatherShadowRequests(Scene);
 	return RenderShadowAtlas(Scene, mShadowRequests, AtlasResolution);
 }
@@ -110,7 +111,7 @@ bool FShadowRenderer::IsValidShadowView(const FShadowView& View) {
 }
 
 bool FShadowRenderer::IsValidShadowRequest(const FShadowMapRequest& Request) {
-	if (!Request.mSettings.mCastShadows || (Request.mViewCount != 1 && Request.mViewCount != PointShadowFaceCount)) {
+	if (!Request.mSettings.mCastShadows || !(Request.mViewCount > 0 && Request.mViewCount <= PointShadowFaceCount)) {
 		return false;
 	}
 	for (uint32 FaceIndex{}; FaceIndex < Request.mViewCount; ++FaceIndex) {
@@ -365,7 +366,22 @@ void FShadowRenderer::GatherShadowRequests(const FScene& Scene) {
 	if (!Scene.DirectionalLightProxies.IsEmpty() && GatherShadowCasterBounds(Scene, CasterBounds)) {
 		for (const FDirectionalLightSceneProxy* Proxy : Scene.DirectionalLightProxies) {
 			FShadowMapRequest Request{};
-			if (Proxy && Proxy->BuildShadowView(CasterBounds, Request.mViews[0])) {
+			if (!Proxy)
+			{
+				continue;
+			}
+			else
+			{
+				// 함수 하나에서 호출한뒤에 분기하는 방식으로 변경하기
+				if (!Proxy->IsCSMEnabled()) 
+				{
+					Proxy->BuildShadowView(CasterBounds, Request.mViews[0]);
+				}
+				else
+				{
+					Proxy->BuildShadowViews(CasterBounds, Request.mViews, CurrentCameraContext);
+					Request.mViewCount = Proxy->GetCascadeCount();
+				}
 				Request.mSettings = Proxy->GetShadowSettings();
 				Request.mLightComponent = Proxy->GetLightComponent();
 				mShadowRequests.Add(Request);

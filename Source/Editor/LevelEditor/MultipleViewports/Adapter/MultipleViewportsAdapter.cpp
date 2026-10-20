@@ -578,12 +578,25 @@ FMatrix FMultipleViewportsAdapter::GetEngineViewProjection(const int32 ViewIndex
 	return PrepareView(ViewIndex).EngineViewProjection;
 }
 
+float FMultipleViewportsAdapter::GetEngineCameraNearClip(int32 ViewIndex) const
+{
+	assert(IsViewActive(ViewIndex));
+	return GetEffectiveCamera(ViewIndex).Projection.NearClip;
+}
+
+float FMultipleViewportsAdapter::GetEngineCameraFarClip(int32 ViewIndex) const
+{
+	assert(IsViewActive(ViewIndex));
+	return GetEffectiveCamera(ViewIndex).Projection.FarClip;
+}
+
 // Native 카메라 위치를 엔진 FVector 그대로 반환한다.
 FVector FMultipleViewportsAdapter::GetEngineCameraLocation(const int32 ViewIndex) const
 {
 	assert(ViewIndex >= 0 && ViewIndex < MaxViewCount);
 	return GetEffectiveCamera(ViewIndex).Transform.Location;
 }
+
 
 // Native 회전에서 정규화한 Forward를 엔진 FVector로 반환한다.
 FVector FMultipleViewportsAdapter::GetEngineCameraForward(const int32 ViewIndex) const

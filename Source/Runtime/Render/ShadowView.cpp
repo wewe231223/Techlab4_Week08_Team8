@@ -112,6 +112,78 @@ bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& Ca
 	return FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView);
 }
 
+bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const FBox& CasterBounds, const FCascadeSliceBounds& SliceBounds, int32 Resolution, FShadowView& OutView)
+{
+	// 빛의 기저 축 구하기
+	FVector Forward{};
+	FVector Right{};
+	FVector Up{};
+	if (!BuildShadowBasis(LightTransform, Forward, Right, Up)) {
+		return false;
+	}
+
+	// slice한 frustum의 BoundingSphere 구하기
+	FVector BoundingSphereCenter;
+	for (int i = 0; i < 4; i++)
+	{
+		BoundingSphereCenter += SliceBounds.CascadeSliceFar[i] + SliceBounds.CascadeSliceNear[i];
+	}
+	BoundingSphereCenter /= 8.0f;
+
+	float BoundingSphereRadiusSqr = 0.0f;
+	for (int i = 0; i < 4; i++)
+	{
+		BoundingSphereRadiusSqr = std::max(BoundingSphereRadiusSqr, FVector(SliceBounds.CascadeSliceFar[i] - BoundingSphereCenter).SizeSquared());
+		BoundingSphereRadiusSqr = std::max(BoundingSphereRadiusSqr, FVector(SliceBounds.CascadeSliceNear[i] - BoundingSphereCenter).SizeSquared());
+	}
+	const float BoundingSphereRadius = std::sqrt(BoundingSphereRadiusSqr);
+
+	const float BorderScale{ 1.0f + 2.0f / static_cast<float>(NormalizeShadowMapResolution(Resolution)) };
+	const float Width{ 2.0f * BoundingSphereRadius * BorderScale };
+	const float Height{ 2.0f * BoundingSphereRadius * BorderScale };
+
+	// Light Camera Position
+	constexpr float DepthPadding{ 0.01f };
+	const FVector CasterBoxCenter{ CasterBounds.Min * 0.5f + CasterBounds.Max * 0.5f };
+	const FVector CasterBoxExtent{ CasterBounds.Max * 0.5f - CasterBounds.Min * 0.5f };
+	float CasterBoxHalfDepth = FVector::Dot(CasterBoxExtent, Forward.GetAbs());
+	float CasterBoxCenterDepth = FVector::Dot(CasterBoxCenter, Forward);
+	float CasterMinZ = CasterBoxCenterDepth - CasterBoxHalfDepth;
+	float SphereCenterZ = FVector::Dot(BoundingSphereCenter, Forward);
+	float BackOffDistance = std::max(BoundingSphereRadius, SphereCenterZ - CasterMinZ) + DepthPadding;
+	FVector Position = BoundingSphereCenter - Forward * BackOffDistance;
+
+	// LightCamera NearPlane FarPlane
+	constexpr float NearPlane{ 0.01f };
+	const float FarPlane{ NearPlane + BackOffDistance + BoundingSphereRadius + DepthPadding };
+
+	// LightCamera ViewMat, ProjMat
+	const FMatrix View{ BuildShadowViewMatrix(Position, Forward, Right, Up) };
+
+	if (!std::isfinite(FarPlane) || !IsFiniteShadowVector(Position) || !IsFiniteShadowMatrix(View)) {
+		return false;
+	}
+
+	const float WidthScale{ 2.0f / Width };
+	const float HeightScale{ 2.0f / Height };
+	const float DepthScale{ 1.0f / (FarPlane - NearPlane) };
+	if (!std::isfinite(WidthScale) || !std::isfinite(HeightScale) || std::min({ WidthScale, HeightScale, DepthScale }) <= 1.0e-6f) {
+		return false;
+	}
+	const FMatrix Projection{
+		0.0f, 0.0f, DepthScale, 0.0f,
+		WidthScale, 0.0f, 0.0f, 0.0f,
+		0.0f, HeightScale, 0.0f, 0.0f,
+		0.0f, 0.0f, -NearPlane * DepthScale, 1.0f
+	};
+
+	// ShadowView Result
+	FShadowView Result{};
+	Result.mView = View;
+	Result.mProjection = Projection;
+	return FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView);
+}
+
 bool BuildSpotShadowView(const FTransform& LightTransform, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView) {
 	const FVector& LightPosition{ LightTransform.Location };
 	if (!IsFiniteShadowVector(LightPosition) || !std::isfinite(OuterConeAngle) || OuterConeAngle <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {

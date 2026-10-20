@@ -438,6 +438,8 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.GetEngineViewProjection(ViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraLocation(ViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraForward(ViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraNearClip(ViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraFarClip(ViewIndex),
 			RenderQueue, IconQueue, ArrowQueue);
 
 
@@ -468,6 +470,8 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.GetEngineViewProjection(PIEViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraLocation(PIEViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraForward(PIEViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraNearClip(PIEViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraFarClip(PIEViewIndex),
 			RenderQueue, IconQueue, ArrowQueue);
 		CopyPIEWindowToBackbuffer();
 	}
@@ -947,12 +951,18 @@ void UEditorEngine::UpdateGizmoAndPicking()
 }
 
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
-void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
+void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, const float ViewCameraNearZ, const float ViewCameraFarZ, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
 	FScene& Scene{ ViewWorld.GetScene() };
 	FShadowRenderer& ShadowRenderer{ Renderer->GetShadowRenderer() };
 	const EViewMode ViewMode{ MultipleViewportsAdapter.GetViewMode(ViewIndex) };
 	if (ViewMode == EViewMode::Lit_Lambert || ViewMode == EViewMode::Lit_BlinnPhong) {
-		ShadowRenderer.Render(Scene);
+		FShadowCameraContext CameraContext = {};
+		CameraContext.CameraPosition = ViewCameraLocation;
+		CameraContext.ViewProj = ViewProjection;
+		CameraContext.NearZ = ViewCameraNearZ;
+		CameraContext.FarZ = ViewCameraFarZ;
+
+		ShadowRenderer.Render(Scene, CameraContext);
 	} else {
 		ShadowRenderer.Reset();
 	}

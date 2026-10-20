@@ -48,7 +48,7 @@ public:
 	FShadowRenderer& operator=(const FShadowRenderer&) = delete;
 
 public:
-	bool Render(FScene& Scene, int32 AtlasResolution = mDefaultAtlasResolution);
+	bool Render(FScene& Scene, FShadowCameraContext& CameraContext, int32 AtlasResolution = mDefaultAtlasResolution);
 	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = mDefaultAtlasResolution);
 	void Reset();
 	void BindShadowMaps();
@@ -96,4 +96,6 @@ private:
 	TMap<const ULightComponent*, FShadowMapAllocation> mShadowMapAllocations{};
 	bool mShadowMapReady{};
 	bool mShadowPcfEnabled{};
+
+	FShadowCameraContext CurrentCameraContext;
 };
