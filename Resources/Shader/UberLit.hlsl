@@ -162,6 +162,17 @@ struct FLightContribution
 };
 
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+// WorldPos에서 그림자 맵 텍셀 하나가 덮는 월드 길이. 원근은 깊이 W에 비례하고 직교는 W = 1로 일정하다.
+float GetShadowTexelWorldSize(FShadowMapRenderParameters Parameters, float3 WorldPos) {
+    const float TileResolution = { Parameters.mUvScaleBias.x / Parameters.mTexelSize.x };
+    // 행 벡터 곱이므로 0, 1열이 월드에서 클립 X, Y로 가는 축이며 길이가 투영 배율이다.
+    const float3 AxisX = { float3(Parameters.mLightViewProjection[0][0], Parameters.mLightViewProjection[1][0], Parameters.mLightViewProjection[2][0]) };
+    const float3 AxisY = { float3(Parameters.mLightViewProjection[0][1], Parameters.mLightViewProjection[1][1], Parameters.mLightViewProjection[2][1]) };
+    const float ProjectionScale = { min(length(AxisX), length(AxisY)) };
+    const float W = { mul(float4(WorldPos, 1.0f), Parameters.mLightViewProjection).w };
+    return 2.0f * max(W, 0.0f) / max(TileResolution * ProjectionScale, 1.0e-6f);
+}
+
 float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
     if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps) {
         return 1.0f;
@@ -172,7 +183,9 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal) {
         return 1.0f;
     }
 
-    const float4 LightClip = { mul(float4(WorldPos + Normal * Parameters.mNormalBias, 1.0f), Parameters.mLightViewProjection) };
+    // mNormalBias는 텍셀 수 단위라 거리와 해상도가 달라도 같은 값이 통한다.
+    const float NormalOffset = { Parameters.mNormalBias * GetShadowTexelWorldSize(Parameters, WorldPos) };
+    const float4 LightClip = { mul(float4(WorldPos + Normal * NormalOffset, 1.0f), Parameters.mLightViewProjection) };
     if (LightClip.w <= 0.0f) {
         return 1.0f;
     }
@@ -218,8 +231,10 @@ float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Norm
         return 1.0f;
     }
     const uint FirstIndex = { (uint) Light.mShadowIndex };
-    const float NormalBias = { ShadowMaps[FirstIndex].mNormalBias };
-    const float3 BiasedPosition = { WorldPos + Normal * NormalBias };
+    // 보정 전 위치가 속한 면의 투영으로 텍셀 크기를 구해 텍셀 수 단위의 보정량을 월드 길이로 바꾼다.
+    const FShadowMapRenderParameters ReceiverParameters = { ShadowMaps[FirstIndex + GetPointShadowFaceIndex(WorldPos - Light.Position)] };
+    const float NormalOffset = { ReceiverParameters.mNormalBias * GetShadowTexelWorldSize(ReceiverParameters, WorldPos) };
+    const float3 BiasedPosition = { WorldPos + Normal * NormalOffset };
     const float3 ReceiverDirection = { BiasedPosition - Light.Position };
     const float DistanceSquared = { dot(ReceiverDirection, ReceiverDirection) };
     if (DistanceSquared <= 1.0e-12f) {

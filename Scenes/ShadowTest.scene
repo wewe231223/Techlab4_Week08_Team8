@@ -60474,7 +60474,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 2048,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -60620,7 +60620,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -60733,7 +60733,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -60846,7 +60846,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -60959,7 +60959,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61072,7 +61072,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61185,7 +61185,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61298,7 +61298,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61411,7 +61411,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61524,7 +61524,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61637,7 +61637,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61750,7 +61750,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61863,7 +61863,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -61976,7 +61976,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62089,7 +62089,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62202,7 +62202,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62315,7 +62315,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62428,7 +62428,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62541,7 +62541,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62654,7 +62654,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62767,7 +62767,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62880,7 +62880,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -62993,7 +62993,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63106,7 +63106,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63219,7 +63219,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63332,7 +63332,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63445,7 +63445,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63558,7 +63558,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63671,7 +63671,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63784,7 +63784,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -63897,7 +63897,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64010,7 +64010,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64123,7 +64123,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64236,7 +64236,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64349,7 +64349,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64462,7 +64462,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64575,7 +64575,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64688,7 +64688,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64801,7 +64801,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -64914,7 +64914,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65027,7 +65027,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65140,7 +65140,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65253,7 +65253,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65366,7 +65366,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65479,7 +65479,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65592,7 +65592,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65705,7 +65705,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65818,7 +65818,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -65931,7 +65931,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66044,7 +66044,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66157,7 +66157,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66270,7 +66270,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66383,7 +66383,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66496,7 +66496,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66609,7 +66609,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66722,7 +66722,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66835,7 +66835,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -66948,7 +66948,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67061,7 +67061,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67174,7 +67174,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67287,7 +67287,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67400,7 +67400,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67513,7 +67513,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67626,7 +67626,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67739,7 +67739,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -67854,7 +67854,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68002,7 +68002,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68150,7 +68150,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68298,7 +68298,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68446,7 +68446,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68594,7 +68594,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68742,7 +68742,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -68890,7 +68890,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69038,7 +69038,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69186,7 +69186,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69334,7 +69334,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69482,7 +69482,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69630,7 +69630,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69778,7 +69778,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -69926,7 +69926,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70074,7 +70074,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70222,7 +70222,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70370,7 +70370,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70518,7 +70518,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70666,7 +70666,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70814,7 +70814,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -70962,7 +70962,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71110,7 +71110,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71258,7 +71258,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71406,7 +71406,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71554,7 +71554,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71702,7 +71702,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71850,7 +71850,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -71998,7 +71998,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -72146,7 +72146,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -72294,7 +72294,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -72442,7 +72442,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 1024,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -72591,7 +72591,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -72740,7 +72740,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -72889,7 +72889,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73038,7 +73038,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73187,7 +73187,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73336,7 +73336,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73485,7 +73485,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73634,7 +73634,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73783,7 +73783,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -73932,7 +73932,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74081,7 +74081,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74230,7 +74230,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74379,7 +74379,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74528,7 +74528,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74677,7 +74677,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74826,7 +74826,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -74975,7 +74975,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -75124,7 +75124,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -75273,7 +75273,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -75422,7 +75422,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -75571,7 +75571,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -75720,7 +75720,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -75869,7 +75869,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76018,7 +76018,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76167,7 +76167,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76316,7 +76316,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76465,7 +76465,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76614,7 +76614,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76763,7 +76763,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -76912,7 +76912,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -77061,7 +77061,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },
@@ -77210,7 +77210,7 @@
                                 "mCastShadows": true,
                                 "mShadowDepthBiasPreset": 1,
                                 "mShadowMapResolution": 256,
-                                "mShadowNormalBias": 0.008,
+                                "mShadowNormalBias": 1.0,
                                 "mShadowSlopeScaledDepthBiasPreset": 2
                             }
                         },

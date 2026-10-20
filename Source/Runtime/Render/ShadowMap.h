@@ -76,7 +76,7 @@ struct FLightShadowSettings {
 	int32 mResolution{ DefaultShadowMapResolution }; // 정사각형 그림자 맵 한 변의 요청 해상도(텍셀). 컴포넌트에서 허용 범위로 제한한다.
 	EShadowDepthBiasPreset mDepthBiasPreset{ EShadowDepthBiasPreset::Medium };
 	EShadowSlopeScaledDepthBiasPreset mSlopeScaledDepthBiasPreset{ EShadowSlopeScaledDepthBiasPreset::Medium };
-	float mNormalBias{ 0.01f }; // 그림자 판정 위치를 표면 법선 방향으로 옮기는 보정량. 깊이값을 직접 바꾸는 보정과 구분한다.
+	float mNormalBias{ 1.0f }; // 그림자 판정 위치를 표면 법선 방향으로 옮기는 보정량(그림자 맵 텍셀 수). 깊이값을 직접 바꾸는 보정과 구분한다.
 };
 
 // 그림자 맵 생성 후 GPU에 전달할 데이터. ShadowCommon.hlsli의 구조체와 필드 순서 및 크기를 맞춘다.
@@ -89,7 +89,7 @@ struct alignas(16) FShadowMapRenderParameters {
 	FVector2 mTexelSize{};
 
 	float mDepthPadding{};
-	float mNormalBias{}; // 이 그림자 맵의 판정 위치에 적용할 법선 방향 보정량.
+	float mNormalBias{}; // 이 그림자 맵의 판정 위치에 적용할 법선 방향 보정량(텍셀 수). 셰이더가 받는 점의 텍셀 월드 크기를 곱한다.
 	int32 mTextureIndex{ InvalidShadowMapIndex }; // 렌더러가 관리하는 그림자 텍스처 리소스의 인덱스. 미할당은 -1이다.
 	uint32 mArraySlice{}; // Texture2DArray 내부의 0부터 시작하는 층 번호. 단일 2D 텍스처에서는 사용하지 않고 0을 유지한다.
 	uint32 mPadding[2]{}; // CPU/HLSL 공유 구조체를 16바이트 배수인 112바이트로 맞추는 패딩.

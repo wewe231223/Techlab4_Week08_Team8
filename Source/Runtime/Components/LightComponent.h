@@ -44,5 +44,5 @@ private:
 	int32 mShadowMapResolution{ DefaultShadowMapResolution }; // 그림자 맵 한 변의 요청 해상도(텍셀).
 	int32 mShadowDepthBiasPreset{ static_cast<int32>(EShadowDepthBiasPreset::Medium) };
 	int32 mShadowSlopeScaledDepthBiasPreset{ static_cast<int32>(EShadowSlopeScaledDepthBiasPreset::Medium) };
-	float mShadowNormalBias{ 0.01f }; // 표면 법선 방향으로 그림자 판정 위치를 옮기는 보정량.
+	float mShadowNormalBias{ 1.0f }; // 표면 법선 방향으로 그림자 판정 위치를 옮기는 보정량(그림자 맵 텍셀 수).
 };
