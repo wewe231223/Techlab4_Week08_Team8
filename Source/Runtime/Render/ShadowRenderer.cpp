@@ -531,32 +531,8 @@ void FShadowRenderer::UpdateLightShadowMaps(FScene& Scene, const FShadowMapReque
 	// 모든 면의 재사용 또는 렌더링이 완료되어야 광원의 샘플링 정보를 등록한다.
 	bool IsComplete{ true };
 	for (uint32 FaceIndex{}; FaceIndex < Allocation.mViewCount; ++FaceIndex) {
-		if (!Request.mLightProxy->EvaluateShadowMap(Scene, Request, Allocation, FaceIndex, Atlas, UpdateSerial, mMinShadowCasterTexelRadius)) {
-			Atlas.InvalidateCacheEntry(Request.mLightComponent, FaceIndex);
-			const FLightSceneProxy::FShadowMapState* Map{ Request.mLightProxy->GetShadowMap(FaceIndex) };
-			if (!Map || !Request.mLightProxy->BuildShadowRenderQueue(mShadowRenderQueue, FaceIndex) || !SetShadowRasterizerState(Map->mInput.mDepthBiasPreset, Map->mInput.mSlopeScaledDepthBiasPreset, Map->mInput.mView.mCullBackFaces)) {
-				IsComplete = false;
-				continue;
-			}
-
-			if (!PassStarted) {
-				BeginShadowPass(PassInfo);
-				PassStarted = true;
-			}
-
-			const FShadowAtlasTile& Tile{ Allocation.mTiles[FaceIndex] };
-			ClearShadowTile(Tile);
-			RenderCommand::BindShaderProgram(mShadowShader);
-			RenderCommand::SetDepthStencilState(EDepthStencilState::Default);
-			SetShadowRasterizerState(Map->mInput.mDepthBiasPreset, Map->mInput.mSlopeScaledDepthBiasPreset, Map->mInput.mView.mCullBackFaces);
-			if (DrawShadowCasters(mShadowRenderQueue, Map->mInput.mView, Tile)) {
-				Request.mLightProxy->CommitShadowCasters(FaceIndex);
-				Atlas.StoreCacheEntry(Request.mLightComponent, FaceIndex, Map->mInput);
-			}
-		}
-
-		const FShadowCacheEntry* Entry{ Atlas.GetCacheEntry(Request.mLightComponent, FaceIndex) };
-		if (Entry && Entry->mHasCachedContent) {
+		const FShadowCacheEntry* Entry{ UpdateShadowFace(Scene, Request, Allocation, FaceIndex, Atlas, PassInfo, PassStarted, UpdateSerial) };
+		if (Entry) {
 			Views[FaceIndex] = Entry->mView;
 		} else {
 			IsComplete = false;
@@ -566,6 +542,36 @@ void FShadowRenderer::UpdateLightShadowMaps(FScene& Scene, const FShadowMapReque
 	if (IsComplete) {
 		AddShadowMapParameters(Request, Allocation, Views);
 	}
+}
+
+const FShadowCacheEntry* FShadowRenderer::UpdateShadowFace(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, uint32 FaceIndex, FShadowAtlas& Atlas, const FRenderingInfo& PassInfo, bool& PassStarted, uint64 UpdateSerial) {
+	if (!Request.mLightProxy->EvaluateShadowMap(Scene, Request, Allocation, FaceIndex, Atlas, UpdateSerial, mMinShadowCasterTexelRadius)) {
+		Atlas.InvalidateCacheEntry(Request.mLightComponent, FaceIndex);
+		const FLightSceneProxy::FShadowMapState* Map{ Request.mLightProxy->GetShadowMap(FaceIndex) };
+		if (!Map || !Request.mLightProxy->BuildShadowRenderQueue(mShadowRenderQueue, FaceIndex) || !SetShadowRasterizerState(Map->mInput.mDepthBiasPreset, Map->mInput.mSlopeScaledDepthBiasPreset, Map->mInput.mView.mCullBackFaces)) {
+			return nullptr;
+		}
+
+		if (!PassStarted) {
+			BeginShadowPass(PassInfo);
+			PassStarted = true;
+		}
+
+		const FShadowAtlasTile& Tile{ Allocation.mTiles[FaceIndex] };
+		ClearShadowTile(Tile);
+		RenderCommand::BindShaderProgram(mShadowShader);
+		RenderCommand::SetDepthStencilState(EDepthStencilState::Default);
+		SetShadowRasterizerState(Map->mInput.mDepthBiasPreset, Map->mInput.mSlopeScaledDepthBiasPreset, Map->mInput.mView.mCullBackFaces);
+		if (!DrawShadowCasters(mShadowRenderQueue, Map->mInput.mView, Tile)) {
+			return nullptr;
+		}
+
+		Request.mLightProxy->CommitShadowCasters(FaceIndex);
+		Atlas.StoreCacheEntry(Request.mLightComponent, FaceIndex, Map->mInput);
+	}
+
+	const FShadowCacheEntry* Entry{ Atlas.GetCacheEntry(Request.mLightComponent, FaceIndex) };
+	return Entry && Entry->mHasCachedContent ? Entry : nullptr;
 }
 
 void FShadowRenderer::AddShadowMapParameters(const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, const FShadowView* Views) {

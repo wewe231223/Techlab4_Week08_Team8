@@ -77,6 +77,7 @@ private:
 	void BeginShadowPass(const FRenderingInfo& PassInfo);
 	void RenderLightShadowMaps(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation);
 	void UpdateLightShadowMaps(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, FShadowAtlas& Atlas, const FRenderingInfo& PassInfo, bool& PassStarted, uint64 UpdateSerial);
+	const FShadowCacheEntry* UpdateShadowFace(FScene& Scene, const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, uint32 FaceIndex, FShadowAtlas& Atlas, const FRenderingInfo& PassInfo, bool& PassStarted, uint64 UpdateSerial);
 	void AddShadowMapParameters(const FShadowMapRequest& Request, const FShadowAtlasAllocation& Allocation, const FShadowView* Views);
 	bool DrawShadowCasters(const FRenderQueue& Queue, const FShadowView& View, const FShadowAtlasTile& Tile);
 	bool InitializeShadowClear();
