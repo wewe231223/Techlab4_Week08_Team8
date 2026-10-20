@@ -244,9 +244,9 @@ bool FShadowAtlas::Allocate(const FRequest& Request, FAllocation& OutAllocation)
 		while (AvailableLevel < TargetLevel) {
 			Tile.mResolution /= 2;
 			++AvailableLevel;
-			Page.mFreeTiles[AvailableLevel].Add(FTile{ Tile.mX + Tile.mResolution, Tile.mY, Tile.mResolution }); // 오른쪽 위
-			Page.mFreeTiles[AvailableLevel].Add(FTile{ Tile.mX, Tile.mY + Tile.mResolution, Tile.mResolution }); // 왼쪽 아래
 			Page.mFreeTiles[AvailableLevel].Add(FTile{ Tile.mX + Tile.mResolution, Tile.mY + Tile.mResolution, Tile.mResolution }); // 오른쪽 아래
+			Page.mFreeTiles[AvailableLevel].Add(FTile{ Tile.mX, Tile.mY + Tile.mResolution, Tile.mResolution }); // 왼쪽 아래
+			Page.mFreeTiles[AvailableLevel].Add(FTile{ Tile.mX + Tile.mResolution, Tile.mY, Tile.mResolution }); // 오른쪽 위
 		}
 		// 남은 왼쪽 위 사분면이 정확히 요청 크기이므로 이 면에 할당한다.
 		Allocation.mTiles[FaceIndex] = Tile;
