@@ -40,9 +40,9 @@ float NormalizeShadowMinCasterDepth(float Depth) {
 }
 
 float NormalizeShadowSourceRadius(float Radius) {
-	return std::isfinite(Radius) ? std::max(Radius, 0.0f) : DefaultShadowSourceRadius;
+	return std::isfinite(Radius) ? std::clamp(Radius, 0.0f, MaxShadowSourceRadius) : DefaultShadowSourceRadius;
 }
 
 float NormalizeShadowSourceAngle(float Angle) {
-	return std::isfinite(Angle) ? std::clamp(Angle, 0.0f, 179.0f) : DefaultShadowSourceAngle;
+	return std::isfinite(Angle) ? std::clamp(Angle, 0.0f, MaxShadowSourceAngle) : DefaultShadowSourceAngle;
 }

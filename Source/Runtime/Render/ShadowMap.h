@@ -17,7 +17,9 @@ constexpr int32 DefaultDirectionalShadowMapResolution{ 2048 };
 constexpr uint32 PointShadowFaceCount{ 6 };
 constexpr float DefaultShadowMinCasterDepth{ 1.0f };
 constexpr float DefaultShadowSourceRadius{ 0.05f };
+constexpr float MaxShadowSourceRadius{ 0.5f }; // 그림자용 반경 상한. Rect의 HalfWidth/HalfHeight에는 적용하지 않는다.
 constexpr float DefaultShadowSourceAngle{ 0.5357f }; // 방향광의 발광원 전체 각지름(도).
+constexpr float MaxShadowSourceAngle{ 2.0f };
 
 int32 NormalizeShadowMapResolution(int32 Resolution);
 float NormalizeShadowMinCasterDepth(float Depth);
@@ -93,7 +95,7 @@ struct FLightShadowSettings {
 	EShadowSlopeScaledDepthBiasPreset mSlopeScaledDepthBiasPreset{ EShadowSlopeScaledDepthBiasPreset::Medium };
 	float mNormalBias{ 0.01f }; // 그림자 판정 위치를 표면 법선 방향으로 옮기는 보정량. 깊이값을 직접 바꾸는 보정과 구분한다.
 	float mMinCasterDepth{ DefaultShadowMinCasterDepth }; // PCSS 탐색용 최소 깊이의 사용자 근사값. 투영 Near를 변경하지 않는다.
-	FVector2 mSourceRadius{}; // 원근 광원의 월드 단위 발광면 반경. Rect는 가로/세로 반길이이다.
+	FVector2 mSourceRadius{}; // 원근 광원의 월드 단위 그림자 반경. Rect는 발광면 종횡비를 유지한 별도 반경을 사용한다.
 	float mSourceAngle{}; // 방향광의 발광원 전체 각지름(도).
 };
 
