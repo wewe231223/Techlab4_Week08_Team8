@@ -22,8 +22,8 @@ public:
 	bool IsCSMEnabled() const { return bEnableCSM; }
 	void SetEnableCSM(bool bInEnable) { bEnableCSM = bInEnable; }
 
-	int32 GetCascadeCount() const { return CascadeCount; }
-	void SetCascadeCount(int32 InCascadeCount) { CascadeCount = InCascadeCount; }
+	uint32 GetCascadeCount() const { return CascadeCount; }
+	void SetCascadeCount(uint32 InCascadeCount) { CascadeCount = InCascadeCount; }
 
 	float GetMaxShadowDistance() const { return MaxShadowDistance; }
 	void SetMaxShadowDistance(float InMaxShadowDistance) { MaxShadowDistance = InMaxShadowDistance; }
@@ -35,7 +35,7 @@ public:
 
 private:
 	bool bEnableCSM = false;
-	int32 CascadeCount = 3;
+	uint32 CascadeCount = 3;
 	float MaxShadowDistance = 150.0f;
 	float SplitLambda = 0.85f;
 };

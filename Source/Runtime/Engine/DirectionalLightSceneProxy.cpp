@@ -17,6 +17,7 @@ void FDirectionalLightSceneProxy::GetLightShaderParameters(FLightRenderParameter
 	Out.Direction = Transform.GetForward();
 	Out.Color = FVector{ Color.R, Color.G, Color.B };
 	Out.Intensity = Dir->GetIntensity();
+
 }
 
 bool FDirectionalLightSceneProxy::BuildShadowView(const FBox& CasterBounds, FShadowView& OutView) const {
@@ -79,9 +80,13 @@ bool FDirectionalLightSceneProxy::BuildShadowViews(const FBox& CasterBounds, FSh
 		float LinearSplit = CamContext.NearZ + (ShadowFar - CamContext.NearZ) * ((float)i / CascadeCount);
 		float LogSplit = CamContext.NearZ * pow((ShadowFar / CamContext.NearZ), (float)i / CascadeCount);
 		float LerpedSplit = SplitLambda * LogSplit + (1 - SplitLambda) * LinearSplit;
+		if (i > 0)
+		{
+			CascadeSplits[i-1] = LerpedSplit;
+		}
 		float SplitRatio = (LerpedSplit - CamContext.NearZ) / (CamContext.FarZ - CamContext.NearZ);
 		SplitZRatio.Add(SplitRatio);
-	}
+	}	
 
 	// Frustum 분할 비율에 따라 Orthogornal 직육면체 Frustum 생성
 	for (int i = 0; i < CascadeCount; i++)

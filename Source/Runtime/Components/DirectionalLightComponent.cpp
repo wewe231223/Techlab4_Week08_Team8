@@ -22,7 +22,7 @@ void UDirectionalLightComponent::PostEditChangeProperty(const FProperty& Propert
 
 	if (Property.Name == "CascadeCount")
 	{
-		CascadeCount = std::clamp(CascadeCount, 2, 4);
+		CascadeCount = std::clamp(CascadeCount, static_cast<uint32>(2), static_cast<uint32>(4));
 	}
     else if (Property.Name == "SplitLambda")
     {

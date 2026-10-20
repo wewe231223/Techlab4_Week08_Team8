@@ -42,6 +42,9 @@ struct FDirectionalLightInfo
     float Intensity;
     float3 Color;
     int mShadowIndex; // 방향광의 그림자 데이터 항목 인덱스. -1은 그림자 맵 미할당이다.
+    uint CascadeCount;
+    float4 CascadeSplits;
+    float3 Padding;
 };
 
 // SceneManagement.h의 FLightRenderParameters와 바이트 단위로 같아야 한다.
@@ -302,7 +305,24 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
     const float3 Radiance = { Light.Color * Light.Intensity };
     FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
+    int ShadowIndex = -1;
+    if (Light.CascadeCount > 1 && Light.mShadowIndex >= 0)
+    {
+        const float ViewDepth = mul(float4(WorldPos, 1.0f), ViewProjection).w;
+        for (uint i = 0; i < Light.CascadeCount; i++)
+        {
+            if (ViewDepth < Light.CascadeSplits[i])
+            {
+                ShadowIndex = Light.mShadowIndex + (int) i;
+                break;
+            }
+        }
+    }
+    else
+    {
+        ShadowIndex = Light.mShadowIndex;
+    }
+    const float Visibility = { CastShadow(ShadowIndex, WorldPos, N) };
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif

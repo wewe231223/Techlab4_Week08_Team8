@@ -24,7 +24,7 @@ public:
 		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
 		return Dir ? Dir->IsCSMEnabled() : false;
 	}
-	int32 GetCascadeCount() const 
+	uint32 GetCascadeCount() const 
 	{
 		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
 		return Dir ? Dir->GetCascadeCount() : 2;
@@ -39,5 +39,10 @@ public:
 		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
 		return Dir ? Dir->GetSplitLambda() : 0.85f;
 	}
+	FVector4 GetCascadeSplits() const
+	{
+		return CascadeSplits;
+	}
 private:
+	mutable FVector4 CascadeSplits{};
 };

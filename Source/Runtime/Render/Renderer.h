@@ -63,6 +63,9 @@ struct FDirectionalLightInfo
 	float Intensity;
 	FVector Color;
 	int32 mShadowIndex{ InvalidShadowMapIndex }; // 방향광이 참조할 FShadowMapRenderParameters 항목의 인덱스. 미할당은 -1이다.
+	uint32 CascadeCount;
+	FVector4 CascadeSplits;
+	float Padding[3];
 };
 
 struct FPointLightInfo
@@ -110,7 +113,7 @@ static_assert(sizeof(FLightingConstants) == 32);
 static_assert(offsetof(FLightingConstants, mNumDirectionalLights) == 24);
 
 static_assert(sizeof(FAmbientLightInfo) == 16);
-static_assert(sizeof(FDirectionalLightInfo) == 32);
+static_assert(sizeof(FDirectionalLightInfo) == 64);
 static_assert(offsetof(FDirectionalLightInfo, mShadowIndex) == 28);
 static_assert(sizeof(FPointLightInfo) == 48);
 static_assert(sizeof(FSpotLightInfo) == 64);
