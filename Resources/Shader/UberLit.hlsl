@@ -325,7 +325,8 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal, float2 DiskRot
         WorldToShadowUv * Parameters.mSourceAngleTanHalf * BlockerSeparation :
         WorldToShadowUv * Parameters.mSourceRadius * BlockerSeparation / max(BlockerAvgDepth, 1.0e-6f);
 
-    const float2 MinRadiusUV = {1.0e-6f,1.0e-6f};
+    const float2 ShadowTexelSize = { Parameters.mTexelSize / Parameters.mUvScaleBias.xy };
+    const float2 MinRadiusUV = ShadowTexelSize * 1.0f;
     const float2 FinalRadiusUV = max(MinRadiusUV, FilterRadiusUv);
     
     float Visibility = { 0.0f };
@@ -333,7 +334,7 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal, float2 DiskRot
     for (int i = 0; i < PCSS_SAMPLES; ++i)
     {
         const float2 Offset = RotateDisk(StaticDisk[i], DiskRotation);
-        const float2 SampleUv = ShadowUv + Offset * FilterRadiusUv;
+        const float2 SampleUv = ShadowUv + Offset * FinalRadiusUV;
         if (any(SampleUv < 0.0f) || any(SampleUv > 1.0f))
         {
             Visibility += 1.0f;
