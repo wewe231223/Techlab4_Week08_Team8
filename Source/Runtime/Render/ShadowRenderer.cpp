@@ -27,6 +27,47 @@ namespace {
 		uint32 mPadding[3]{};
 	};
 	static_assert(sizeof(FShadowPreviewConstants) == 48);
+
+	// 그림자 절두체의 월드 공간 꼭짓점 8개. 역행렬이 유효하지 않으면 false를 돌려준다.
+	bool GetShadowFrustumCorners(const FMatrix& ViewProjection, FVector (&OutCorners)[8]) {
+		const FMatrix InverseViewProjection{ ViewProjection.Inverse() };
+		uint32 CornerIndex{};
+		for (const float Z : { 0.0f, 1.0f }) {
+			for (const float Y : { -1.0f, 1.0f }) {
+				for (const float X : { -1.0f, 1.0f }) {
+					const FVector4 Corner{ InverseViewProjection.TransformFVector4(FVector4{ X, Y, Z, 1.0f }) };
+					if (!std::isfinite(Corner.W) || std::abs(Corner.W) < 1.0e-6f) {
+						return false;
+					}
+					OutCorners[CornerIndex] = FVector{ Corner.X / Corner.W, Corner.Y / Corner.W, Corner.Z / Corner.W };
+					if (!std::isfinite(OutCorners[CornerIndex].X) || !std::isfinite(OutCorners[CornerIndex].Y) || !std::isfinite(OutCorners[CornerIndex].Z)) {
+						return false;
+					}
+					++CornerIndex;
+				}
+			}
+		}
+		return true;
+	}
+
+	// 평면 판정의 역방향. 절두체 꼭짓점이 모두 박스의 한 면 바깥에 있으면 겹치지 않는다.
+	// 절두체 평면 판정만으로는 큰 박스가 두 평면에 걸칠 때 생기는 거짓 양성을 걸러 낸다.
+	bool IsFrustumOutsideAABB(const FVector (&Corners)[8], const FAABB& Bounds) {
+		const FVector Min{ Bounds.Center - Bounds.Extent };
+		const FVector Max{ Bounds.Center + Bounds.Extent };
+		for (int32 Axis{}; Axis < 3; ++Axis) {
+			bool AllBelow{ true };
+			bool AllAbove{ true };
+			for (const FVector& Corner : Corners) {
+				AllBelow = AllBelow && Corner[Axis] < Min[Axis];
+				AllAbove = AllAbove && Corner[Axis] > Max[Axis];
+			}
+			if (AllBelow || AllAbove) {
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 FShadowRenderer::FShadowRenderer() {
@@ -321,6 +362,19 @@ uint32 FShadowRenderer::GetShadowMapViewCount(const ULightComponent* LightCompon
 	return GetShadowDepthTexture() && Allocation ? Allocation->mViewCount : 0;
 }
 
+uint32 FShadowRenderer::GetShadowMapLightCount(ELightType LightType, int32 PageIndex) const {
+	if (!GetShadowDepthTexture()) {
+		return 0;
+	}
+	uint32 Count{};
+	for (const auto& [LightComponent, Allocation] : mShadowMapAllocations) {
+		if (Allocation.mLightType == LightType && (PageIndex < 0 || Allocation.mPageIndex == static_cast<uint32>(PageIndex))) {
+			++Count;
+		}
+	}
+	return Count;
+}
+
 void FShadowRenderer::RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex, bool LinearDepth) {
 	mPreviewLight = LightComponent;
 	mPreviewFace = FaceIndex;
@@ -576,6 +630,8 @@ bool FShadowRenderer::IsShadowRequestVisible(const FShadowMapRequest& Request, c
 
 	for (uint32 FaceIndex{}; FaceIndex < Request.mViewCount; ++FaceIndex) {
 		const FFrustumPlanes ShadowFrustum{ ExtractFrustumPlanes(Request.mViews[FaceIndex].mViewProjection) };
+		FVector ShadowFrustumCorners[8]{};
+		const bool HasCorners{ GetShadowFrustumCorners(Request.mViews[FaceIndex].mViewProjection, ShadowFrustumCorners) };
 		for (const FAABB& Bounds : ReceiverBounds) {
 			if (LightParameters) {
 				const FVector Offset{ LightParameters->Position - Bounds.Center };
@@ -584,7 +640,7 @@ bool FShadowRenderer::IsShadowRequestVisible(const FShadowMapRequest& Request, c
 					continue;
 				}
 			}
-			if (IsAABBInFrustum(Bounds, ShadowFrustum)) {
+			if (IsAABBInFrustum(Bounds, ShadowFrustum) && !(HasCorners && IsFrustumOutsideAABB(ShadowFrustumCorners, Bounds))) {
 				return true;
 			}
 		}
@@ -752,7 +808,7 @@ void FShadowRenderer::AddShadowMapParameters(const FShadowMapRequest& Request, c
 		mShadowMapRenderParameters.Add(Parameters);
 	}
 
-	mShadowMapAllocations.Add(Request.mLightComponent, FShadowMapAllocation{ FirstIndex, Allocation.mViewCount });
+	mShadowMapAllocations.Add(Request.mLightComponent, FShadowMapAllocation{ FirstIndex, Allocation.mViewCount, Allocation.mPageIndex, Request.mLightComponent->GetLightType() });
 	mShadowMapReady = true;
 }
 

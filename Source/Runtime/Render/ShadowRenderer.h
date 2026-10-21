@@ -20,6 +20,7 @@ class FTexture2D;
 class FTexture2DArray;
 class FPrimitiveSceneProxy;
 class ULightComponent;
+enum class ELightType;
 struct FBox;
 struct FRenderingInfo;
 struct FLightRenderParameters;
@@ -35,6 +36,8 @@ private:
 	struct FShadowMapAllocation {
 		int32 mFirstIndex{ InvalidShadowMapIndex };
 		uint32 mViewCount{};
+		uint32 mPageIndex{};
+		ELightType mLightType{};
 	};
 
 public:
@@ -62,6 +65,8 @@ public:
 	const FShadowMapRenderParameters* GetShadowMapRenderParameters(const ULightComponent* LightComponent, uint32 FaceIndex = 0) const;
 	int32 GetShadowMapIndex(const ULightComponent* LightComponent) const;
 	uint32 GetShadowMapViewCount(const ULightComponent* LightComponent) const;
+	// 마지막 그림자 렌더에서 아틀라스에 배치된 해당 종류의 조명 수. PageIndex가 음수면 모든 페이지를 센다.
+	uint32 GetShadowMapLightCount(ELightType LightType, int32 PageIndex = -1) const;
 	// 에디터 미리보기. 요청한 다음 그림자 렌더부터 해당 타일을 2D 텍스처로 그린다. nullptr로 요청하면 멈춘다.
 	void RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex, bool LinearDepth = false);
 	FTexture2D* GetShadowPreviewTexture() const;
@@ -100,7 +105,7 @@ private:
 	static constexpr uint32 mTextureSlot{ 13 };
 	static constexpr uint32 mBufferSlot{ 14 };
 	static constexpr uint32 mSamplerSlot{ 1 };
-	static constexpr int32 mMaxAtlasPageCount{ 4 };
+	static constexpr int32 mMaxAtlasPageCount{ 8 };
 
 	static constexpr uint32 mPreviewResolution{ 512 };
 	static constexpr uint32 mAtlasPreviewResolution{ 1024 };

@@ -1,6 +1,7 @@
 #include "EnginePCH.h"
 #include "ShadowAtlasPanel.h"
 
+#include "Components/LightComponentBase.h"
 #include "Render/ShadowRenderer.h"
 #include "Render/Texture2D.h"
 #include "Render/Texture2DArray.h"
@@ -52,6 +53,11 @@ void FShadowAtlasPanel::OnRender() {
 	mLinearDepth = DisplayMode == 1;
 	ImGui::TextDisabled(mLinearDepth ? "Linear: normalized light-view distance per tile" : "Raw: stored depth (red channel)");
 	ImGui::TextDisabled("Last rendered view | Yellow: atlas and shadow map tile boundaries");
+	ImGui::Text("Lights | Directional: %u | Point: %u | Spot: %u | Rect: %u",
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Directional),
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Point),
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Spot),
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Rect));
 	if (ImGui::BeginTabBar("ShadowAtlasPages")) {
 		for (uint32 PageIndex{}; PageIndex < Atlas->GetArraySize(); ++PageIndex) {
 			const FString Label{ std::format("Page {}", PageIndex) };
@@ -82,6 +88,12 @@ void FShadowAtlasPanel::Open() {
 
 void FShadowAtlasPanel::DrawAtlasPage(uint32 PageIndex, const FTexture2DArray& Atlas) {
 	ImGui::Text("%u x %u | Page %u / %u", Atlas.GetWidth(), Atlas.GetHeight(), PageIndex + 1, Atlas.GetArraySize());
+	const int32 Page{ static_cast<int32>(PageIndex) };
+	ImGui::Text("This page | Directional: %u | Point: %u | Spot: %u | Rect: %u",
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Directional, Page),
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Point, Page),
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Spot, Page),
+		mShadowRenderer->GetShadowMapLightCount(ELightType::Rect, Page));
 	FTexture2D* Preview{ mShadowRenderer->GetShadowAtlasPreviewTexture(PageIndex) };
 	if (!Preview || !Preview->GetSRV()) {
 		ImGui::TextDisabled("Preparing atlas preview...");
