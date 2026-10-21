@@ -630,6 +630,7 @@ void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<
 
 	LightingConstants.NumLocalLights = NumLocalLightsThisFrame;
 	LightingConstants.mNumShadowMaps = mShadowRenderer.GetShadowMapCount();
+	LightingConstants.bDebugCSM = bDebugCSM ? 1u : 0u;
 	RenderCommand::UpdateBufferData(LightingCB.get(), &LightingConstants, sizeof(FLightingConstants));
 
 	// CullLights 전에는 NumTilesX = 0으로 두어 PS가 셀 버퍼 대신 전체 순회를 쓰게 한다.

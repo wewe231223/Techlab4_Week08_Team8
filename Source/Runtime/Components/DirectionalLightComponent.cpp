@@ -30,6 +30,6 @@ void UDirectionalLightComponent::PostEditChangeProperty(const FProperty& Propert
     }
     else if (Property.Name == "MaxShadowDistance")
     {
-        MaxShadowDistance = std::max(MaxShadowDistance, 150.0f);
+        MaxShadowDistance = std::max(MaxShadowDistance, 50.0f);
     }
 }

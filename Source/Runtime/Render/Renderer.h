@@ -107,7 +107,7 @@ struct alignas(16) FLightingConstants
 	uint32 NumLocalLights;
 	uint32 mNumShadowMaps{};
 	uint32 mNumDirectionalLights{};
-	uint32 Padding{};
+	uint32 bDebugCSM{};
 };
 static_assert(sizeof(FLightingConstants) == 32);
 static_assert(offsetof(FLightingConstants, mNumDirectionalLights) == 24);
@@ -245,6 +245,8 @@ public:
 	void SetLightDebugMode(uint32 Mode);
 	void SetLightCullingMode(ELightCullingMode Mode) { LightCullingMode = Mode; }
 	ELightCullingMode GetLightCullingMode() const { return LightCullingMode; }
+	void SetDebugCSM(bool bEnable) { bDebugCSM = bEnable; }
+	bool IsDebugCSMEnabled() const { return bDebugCSM; }
 private:
 	void DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProjection);
 	void DrawStaticGroups();
@@ -263,6 +265,7 @@ private:
 	// NumTilesX = 0인 b5. 2.5D 목록은 불투명 깊이 기준이라 반투명은 이것으로 전체 순회한다.
 	TUniquePtr<FConstantBuffer> GridLightingFallbackCB{};
 	uint32 LightDebugMode{};
+	bool bDebugCSM = false;
 	ELightCullingMode LightCullingMode = ELightCullingMode::Clustered;
 	// RenderDepth 동안 true. BindMaterial이 PS를 끈다.
 	bool bDepthOnly = false;

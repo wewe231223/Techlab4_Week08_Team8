@@ -124,11 +124,23 @@ bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const F
 
 	// slice한 frustum의 BoundingSphere 구하기
 	FVector BoundingSphereCenter;
-	for (int i = 0; i < 4; i++)
-	{
-		BoundingSphereCenter += SliceBounds.CascadeSliceFar[i] + SliceBounds.CascadeSliceNear[i];
-	}
-	BoundingSphereCenter /= 8.0f;
+	//for (int i = 0; i < 4; i++)
+	//{
+	//	BoundingSphereCenter += SliceBounds.CascadeSliceFar[i] + SliceBounds.CascadeSliceNear[i];
+	//}
+	//BoundingSphereCenter /= 8.0f;
+
+	FVector CenterNear = (SliceBounds.CascadeSliceNear[0] + SliceBounds.CascadeSliceNear[1] +
+		SliceBounds.CascadeSliceNear[2] + SliceBounds.CascadeSliceNear[3]) * 0.25f;
+	FVector CenterFar = (SliceBounds.CascadeSliceFar[0] + SliceBounds.CascadeSliceFar[1] +
+		SliceBounds.CascadeSliceFar[2] + SliceBounds.CascadeSliceFar[3]) * 0.25f;
+	float NearFarDistanceSqr = FVector(CenterFar - CenterNear).SizeSquared();
+	float RadiusFarSqr = FVector((SliceBounds.CascadeSliceFar[0] - SliceBounds.CascadeSliceFar[2]) / 2.0f).SizeSquared();
+	float RadiusNearSqr = FVector((SliceBounds.CascadeSliceNear[0] - SliceBounds.CascadeSliceNear[2]) / 2.0f).SizeSquared();
+
+	float CenterOffsetRatio = 0.5f + (RadiusFarSqr - RadiusNearSqr) / (2.0f * NearFarDistanceSqr);
+	CenterOffsetRatio = std::clamp(CenterOffsetRatio, 0.0f, 1.0f);
+	BoundingSphereCenter = CenterNear + (CenterFar - CenterNear) * CenterOffsetRatio;
 
 	float BoundingSphereRadiusSqr = 0.0f;
 	for (int i = 0; i < 4; i++)
@@ -151,6 +163,16 @@ bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const F
 	float CasterMinZ = CasterBoxCenterDepth - CasterBoxHalfDepth;
 	float SphereCenterZ = FVector::Dot(BoundingSphereCenter, Forward);
 	float BackOffDistance = std::max(BoundingSphereRadius, SphereCenterZ - CasterMinZ) + DepthPadding;
+	
+	// 텍셀 스내핑
+
+	const float WorldSizePerTexel = Width / static_cast<float>(NormalizeShadowMapResolution(Resolution));
+	float CenterX = FVector::Dot(BoundingSphereCenter, Right);
+	float CenterY = FVector::Dot(BoundingSphereCenter, Up);
+	float SnappedX = std::round(CenterX / WorldSizePerTexel) * WorldSizePerTexel;
+	float SnappedY = std::round(CenterY / WorldSizePerTexel) * WorldSizePerTexel;
+	BoundingSphereCenter += Right * (SnappedX - CenterX) + Up * (SnappedY - CenterY);
+
 	FVector Position = BoundingSphereCenter - Forward * BackOffDistance;
 
 	// LightCamera NearPlane FarPlane

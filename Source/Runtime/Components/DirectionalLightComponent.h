@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LightComponent.h"
+#include <algorithm>
 
 class UDirectionalLightComponent :public ULightComponent
 {
@@ -29,13 +30,13 @@ public:
 	void SetMaxShadowDistance(float InMaxShadowDistance) { MaxShadowDistance = InMaxShadowDistance; }
 
 	float GetSplitLambda() const { return SplitLambda; }
-	void SetSplitLambda(float InSplitLambda) { SplitLambda = InSplitLambda; }
+	void SetSplitLambda(float InSplitLambda) { SplitLambda = std::clamp(InSplitLambda, 0.0f, 1.0f); }
 
 	virtual void PostEditChangeProperty(const FProperty& Property) override;
 
 private:
 	bool bEnableCSM = false;
 	uint32 CascadeCount = 3;
-	float MaxShadowDistance = 150.0f;
+	float MaxShadowDistance = 50.0f;
 	float SplitLambda = 0.85f;
 };

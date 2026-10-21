@@ -44,6 +44,7 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
 	ImGui::Checkbox("FXAA", &Settings.bEnableFXAA);
 	ImGui::Checkbox("Shadow PCF", &Settings.mEnableShadowPcf);
+	ImGui::Checkbox("CSM Debug", &Settings.bDebugCSM);
 	ImGui::SliderFloat("Exposure", &Settings.Exposure, 0.1f, 5.0f, "%.2f");
 	ImGui::Checkbox("Depth View", &Settings.bDepthView);
 	ImGui::Checkbox("Exponential Height Fog", &Settings.bExponentialHeightFog);
@@ -127,6 +128,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "DrawPSGrid=" << Settings.bDrawPSGrid << "\n";
 	File << "EnableFXAA=" << Settings.bEnableFXAA << "\n";
 	File << "EnableShadowPCF=" << Settings.mEnableShadowPcf << "\n";
+	File << "DebugCSM=" << Settings.bDebugCSM << "\n";
 	File << "LightingModel=" << Settings.LightingModel << "\n";
 	File << "\n";
 
@@ -250,6 +252,7 @@ bool FSettingsPanel::LoadSettings()
 				else if (Key == "DrawPSGrid") Settings.bDrawPSGrid = std::stoi(ValueStr);
 				else if (Key == "EnableFXAA") Settings.bEnableFXAA = std::stoi(ValueStr);
 				else if (Key == "EnableShadowPCF") Settings.mEnableShadowPcf = std::stoi(ValueStr) != 0;
+				else if (Key == "DebugCSM") Settings.bDebugCSM = std::stoi(ValueStr) != 0;
 				else if (Key == "LightingModel") Settings.LightingModel = std::stoi(ValueStr);
 
 				else if (Key == "CameraMoveSpeed") Settings.CameraSpeed = std::stof(ValueStr);

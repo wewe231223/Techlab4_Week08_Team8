@@ -687,7 +687,11 @@ namespace
 		switch (Property.Type)
 		{
 		case EPropertyType::Float:
-			bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			if (Property.Name == "SplitLambda" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 1.0f, "%.2f");
+			} else {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			}
 			break;
 		case EPropertyType::Int:
 			if (Property.Name == "mShadowMapResolution" && Cast<ULightComponent>(Object)) {
@@ -696,6 +700,8 @@ namespace
 				bChanged = DrawShadowDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
 			} else if (Property.Name == "mShadowSlopeScaledDepthBiasPreset" && Cast<ULightComponent>(Object)) {
 				bChanged = DrawShadowSlopeScaledDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
+			} else if (Property.Name == "CascadeCount" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderInt(Label.c_str(), static_cast<int*>(ValuePtr), 2, 4);
 			} else {
 				bChanged = ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
 			}

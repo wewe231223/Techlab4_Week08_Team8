@@ -409,6 +409,7 @@ void UEditorEngine::RenderMultipleViewports()
 	Renderer->SetLightDebugMode(SettingsPanel->GetSettings().LightDebugMode);
 	Renderer->SetLightCullingMode(static_cast<ELightCullingMode>(SettingsPanel->GetSettings().LightCullingMode));
 	Renderer->GetShadowRenderer().SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
+	Renderer->SetDebugCSM(SettingsPanel->GetSettings().bDebugCSM);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)
 	{
 		const bool bActive = MultipleViewportsAdapter.IsViewActive(ViewIndex);
