@@ -408,7 +408,7 @@ void UEditorEngine::RenderMultipleViewports()
 	UWorld* CapturedWorld = nullptr;
 	Renderer->SetLightDebugMode(SettingsPanel->GetSettings().LightDebugMode);
 	Renderer->SetLightCullingMode(static_cast<ELightCullingMode>(SettingsPanel->GetSettings().LightCullingMode));
-	Renderer->GetShadowRenderer().SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
+	Renderer->GetShadowRenderer().SetShadowFilterMode(SettingsPanel->GetSettings().mShadowFilterMode);
 	Renderer->GetShadowRenderer().SetShadowCacheEnabled(SettingsPanel->GetSettings().mEnableShadowCache);
 	Renderer->GetShadowRenderer().SetMinShadowCasterTexelRadius(SettingsPanel->GetSettings().mMinShadowCasterTexelRadius);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)

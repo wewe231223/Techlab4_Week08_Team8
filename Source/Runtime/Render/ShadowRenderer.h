@@ -46,8 +46,8 @@ public:
 	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = mDefaultAtlasResolution);
 	void Reset();
 	void BindShadowMaps();
-	void SetShadowPcfEnabled(bool Enabled);
-	bool IsShadowPcfEnabled() const;
+	void SetShadowFilterMode(EShadowFilterMode Mode);
+	EShadowFilterMode GetShadowFilterMode() const;
 	void SetShadowCacheEnabled(bool Enabled);
 	bool IsShadowCacheEnabled() const;
 	// 그림자 맵에서 이 텍셀 반지름보다 작게 그려질 Caster를 제외한다. 0이면 끈다.
@@ -123,7 +123,7 @@ private:
 	TArray<FShadowMapRenderParameters> mShadowMapRenderParameters{};
 	TMap<const ULightComponent*, FShadowMapAllocation> mShadowMapAllocations{};
 	bool mShadowMapReady{};
-	bool mShadowPcfEnabled{};
+	EShadowFilterMode mShadowFilterMode{ EShadowFilterMode::None };
 	// OFF에서는 Caster 변경 추적과 재사용 평가를 건너뛴다.
 	bool mShadowCacheEnabled{ true };
 	// 값이 바뀌면 수집되는 Caster 목록이 달라져 캐시 조건이 다시 그리게 한다.

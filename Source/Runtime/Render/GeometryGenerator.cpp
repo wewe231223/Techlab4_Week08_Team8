@@ -434,6 +434,7 @@ TUniquePtr<FStaticMeshData> FGeometryGenerator::CreateSphere(float Radius, uint3
 			FVertex Vertex;
 			Vertex.Position = FVector(r * cosf(Theta), r * sinf(Theta), z);
 			Vertex.UV = FVector2(float(j) / NumSlices, float(i) / NumStacks);
+			Vertex.Normal = Vertex.Position.GetSafeNormal();
 			Vertex.Color = Color;
 
 			SphereMeshData->Vertices.Add(Vertex);
@@ -460,7 +461,7 @@ TUniquePtr<FStaticMeshData> FGeometryGenerator::CreateSphere(float Radius, uint3
 		}
 	}
 
-	CalculateNormals(SphereMeshData->Vertices, SphereMeshData->Indices);
+	//CalculateNormals(SphereMeshData->Vertices, SphereMeshData->Indices);
 	SphereMeshData->AABB = CalculateAABB(SphereMeshData->Vertices);
 
 	return SphereMeshData;

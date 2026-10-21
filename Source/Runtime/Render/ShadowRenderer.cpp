@@ -46,12 +46,12 @@ void FShadowRenderer::Reset() {
 	mPreviewReady = false;
 }
 
-void FShadowRenderer::SetShadowPcfEnabled(bool Enabled) {
-	mShadowPcfEnabled = Enabled;
+void FShadowRenderer::SetShadowFilterMode(EShadowFilterMode Mode) {
+	mShadowFilterMode = NormalizeShadowFilterMode(static_cast<int32>(Mode));
 }
 
-bool FShadowRenderer::IsShadowPcfEnabled() const {
-	return mShadowPcfEnabled;
+EShadowFilterMode FShadowRenderer::GetShadowFilterMode() const {
+	return mShadowFilterMode;
 }
 
 uint32 FShadowRenderer::GetShadowMapCount() const {
@@ -63,7 +63,7 @@ bool FShadowRenderer::InitializeComparisonSampler() {
 		return true;
 	}
 	D3D11_SAMPLER_DESC Desc{};
-	Desc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+	Desc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
 	Desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
 	Desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
 	Desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
@@ -464,6 +464,11 @@ FShadowMapRenderParameters FShadowRenderer::BuildShadowMapRenderParameters(const
 	Parameters.mTexelSize = FVector2{ 1.0f / static_cast<float>(DepthTexture->GetWidth()), 1.0f / static_cast<float>(DepthTexture->GetHeight()) };
 	Parameters.mUvScaleBias = FVector4{ static_cast<float>(Tile.mResolution) * Parameters.mTexelSize.X, static_cast<float>(Tile.mResolution) * Parameters.mTexelSize.Y, static_cast<float>(Tile.mX) * Parameters.mTexelSize.X, static_cast<float>(Tile.mY) * Parameters.mTexelSize.Y };
 	Parameters.mNormalBias = std::isfinite(Settings.mNormalBias) ? std::max(Settings.mNormalBias, 0.0f) : FLightShadowSettings{}.mNormalBias;
+	Parameters.mNearFar = FVector2{ View.mNearPlane, View.mFarPlane };
+	Parameters.mMinCasterDepth = NormalizeShadowMinCasterDepth(Settings.mMinCasterDepth);
+	Parameters.mSourceRadius = FVector2{ NormalizeShadowSourceRadius(Settings.mSourceRadius.X), NormalizeShadowSourceRadius(Settings.mSourceRadius.Y) };
+	Parameters.mSourceAngleTanHalf = std::tan(FMath::DegreesToRadians(NormalizeShadowSourceAngle(Settings.mSourceAngle)) * 0.5f);
+	Parameters.mIsOrthographic = View.mIsOrthographic ? 1u : 0u;
 	return Parameters;
 }
 

@@ -43,7 +43,10 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
 	ImGui::Checkbox("FXAA", &Settings.bEnableFXAA);
-	ImGui::Checkbox("Shadow PCF", &Settings.mEnableShadowPcf);
+	int ShadowFilterMode{ static_cast<int>(Settings.mShadowFilterMode) };
+	if (ImGui::Combo("Shadow Filter", &ShadowFilterMode, "None\0PCF\0PCSS\0")) {
+		Settings.mShadowFilterMode = NormalizeShadowFilterMode(ShadowFilterMode);
+	}
 	ImGui::Checkbox("Shadow Map Cache", &Settings.mEnableShadowCache);
 	ImGui::SliderFloat("Shadow Caster Min Texels", &Settings.mMinShadowCasterTexelRadius, 0.0f, 8.0f, "%.1f");
 	ImGui::SliderFloat("Exposure", &Settings.Exposure, 0.1f, 5.0f, "%.2f");
@@ -128,7 +131,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "DrawBatchLine=" << Settings.bDrawBatchLine << "\n";
 	File << "DrawPSGrid=" << Settings.bDrawPSGrid << "\n";
 	File << "EnableFXAA=" << Settings.bEnableFXAA << "\n";
-	File << "EnableShadowPCF=" << Settings.mEnableShadowPcf << "\n";
+	File << "ShadowFilterMode=" << static_cast<int32>(Settings.mShadowFilterMode) << "\n";
 	File << "EnableShadowCache=" << Settings.mEnableShadowCache << "\n";
 	File << "ShadowCasterMinTexelRadius=" << Settings.mMinShadowCasterTexelRadius << "\n";
 	File << "LightingModel=" << Settings.LightingModel << "\n";
@@ -175,6 +178,7 @@ bool FSettingsPanel::LoadSettings()
 
 	uint8 LocationComponentMasks[4]{};
 	uint8 RotationComponentMasks[4]{};
+	bool HasShadowFilterMode{};
 	for (int32 Index = 0; Index < 4; ++Index)
 	{
 		Settings.bViewLocationSaved[Index] = false;
@@ -253,7 +257,18 @@ bool FSettingsPanel::LoadSettings()
 				else if (Key == "DrawBatchLine") Settings.bDrawBatchLine = std::stoi(ValueStr);
 				else if (Key == "DrawPSGrid") Settings.bDrawPSGrid = std::stoi(ValueStr);
 				else if (Key == "EnableFXAA") Settings.bEnableFXAA = std::stoi(ValueStr);
-				else if (Key == "EnableShadowPCF") Settings.mEnableShadowPcf = std::stoi(ValueStr) != 0;
+				else if (Key == "ShadowFilterMode") {
+					std::istringstream Number{ ValueStr };
+					int32 Mode{};
+					if (Number >> Mode && Mode >= 0 && Mode < static_cast<int32>(EShadowFilterMode::Count)) {
+						Settings.mShadowFilterMode = static_cast<EShadowFilterMode>(Mode);
+						HasShadowFilterMode = true;
+					}
+				}
+				else if (Key == "EnableShadowPCF" && !HasShadowFilterMode) {
+					// 구형 설정은 새 모드 값이 없을 때만 사용한다.
+					Settings.mShadowFilterMode = std::stoi(ValueStr) != 0 ? EShadowFilterMode::PCF : EShadowFilterMode::None;
+				}
 				else if (Key == "EnableShadowCache") Settings.mEnableShadowCache = std::stoi(ValueStr) != 0;
 				else if (Key == "ShadowCasterMinTexelRadius") Settings.mMinShadowCasterTexelRadius = std::stof(ValueStr);
 				else if (Key == "LightingModel") Settings.LightingModel = std::stoi(ValueStr);

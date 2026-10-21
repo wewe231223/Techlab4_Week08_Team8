@@ -1,8 +1,36 @@
 #include "EnginePCH.h"
 #include "RectLightComponent.h"
+
 #include "Render/LineBatcher.h"
 
 #include "Engine/RectLightSceneProxy.h"
+
+#include <algorithm>
+#include <cmath>
+
+void URectLightComponent::PostEditChangeProperty(const FProperty& Property) {
+	Super::PostEditChangeProperty(Property);
+	SetShadowSourceRadius(ShadowSourceRadius);
+}
+
+FLightShadowSettings URectLightComponent::GetShadowSettings() const {
+	FLightShadowSettings Settings{ Super::GetShadowSettings() };
+	Settings.mSourceRadius = FVector2{};
+	if (std::isfinite(HalfWidth) && HalfWidth > 0.0f && std::isfinite(HalfHeight) && HalfHeight > 0.0f) {
+		const float LongestHalfExtent{ std::max(HalfWidth, HalfHeight) };
+		const float Radius{ GetShadowSourceRadius() };
+		Settings.mSourceRadius = FVector2{ HalfWidth / LongestHalfExtent * Radius, HalfHeight / LongestHalfExtent * Radius };
+	}
+	return Settings;
+}
+
+float URectLightComponent::GetShadowSourceRadius() const {
+	return NormalizeShadowSourceRadius(ShadowSourceRadius);
+}
+
+void URectLightComponent::SetShadowSourceRadius(float Radius) {
+	ShadowSourceRadius = NormalizeShadowSourceRadius(Radius);
+}
 
 URectLightComponent::URectLightComponent() {}
 URectLightComponent::~URectLightComponent() {}

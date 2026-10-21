@@ -8,6 +8,7 @@ class URectLightComponent :public ULocalLightComponent
 	REFLECT_START(URectLightComponent)
 		PROPERTY(HalfWidth)
 		PROPERTY(HalfHeight)
+		PROPERTY(ShadowSourceRadius)
 		PROPERTY(BarnDoorAngle)
 		PROPERTY(BarnDoorLength)
 	REFLECT_END()
@@ -15,6 +16,10 @@ public:
 	URectLightComponent();
 	virtual ~URectLightComponent() override;
 	virtual FLightSceneProxy* CreateSceneProxy() const override;
+	virtual void PostEditChangeProperty(const FProperty& Property) override;
+	virtual FLightShadowSettings GetShadowSettings() const override;
+	float GetShadowSourceRadius() const;
+	void SetShadowSourceRadius(float Radius);
 
 	ELightType GetLightType() const { return ELightType::Rect; }
 	void DrawDebug(FLineBatcher* LineBatcher) const;
@@ -32,6 +37,7 @@ public:
 private:
 	float HalfWidth = 3.0f;
 	float HalfHeight = 3.0f;
+	float ShadowSourceRadius{ DefaultShadowSourceRadius }; // 긴 변 기준의 그림자 반경. 발광면 크기와 독립적으로 조절한다.
 	float BarnDoorAngle = 88.0f;	// 도 단위
 	float BarnDoorLength = 2.0f;	
 };

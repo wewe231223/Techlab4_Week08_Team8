@@ -21,6 +21,7 @@ void ULightComponent::PostEditChangeProperty(const FProperty& Property) {
 	SetShadowDepthBiasPreset(GetShadowDepthBiasPreset());
 	SetShadowSlopeScaledDepthBiasPreset(GetShadowSlopeScaledDepthBiasPreset());
 	SetShadowNormalBias(mShadowNormalBias);
+	SetMinCasterDepth(mMinCasterDepth);
 }
 
 bool ULightComponent::CastsShadows() const {
@@ -34,7 +35,16 @@ FLightShadowSettings ULightComponent::GetShadowSettings() const {
 	Settings.mDepthBiasPreset = GetShadowDepthBiasPreset();
 	Settings.mSlopeScaledDepthBiasPreset = GetShadowSlopeScaledDepthBiasPreset();
 	Settings.mNormalBias = std::max(mShadowNormalBias, 0.0f);
+	Settings.mMinCasterDepth = GetMinCasterDepth();
 	return Settings;
+}
+
+float ULightComponent::GetMinCasterDepth() const {
+	return NormalizeShadowMinCasterDepth(mMinCasterDepth);
+}
+
+void ULightComponent::SetMinCasterDepth(float Depth) {
+	mMinCasterDepth = NormalizeShadowMinCasterDepth(Depth);
 }
 
 EShadowDepthBiasPreset ULightComponent::GetShadowDepthBiasPreset() const {

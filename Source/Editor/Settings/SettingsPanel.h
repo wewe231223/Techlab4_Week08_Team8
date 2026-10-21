@@ -4,6 +4,7 @@
 #include "Editor/EditorUI/EditorPanel.h"
 #include "Math/Quat.h"
 #include "Math/Vector.h"
+#include "Render/ShadowMap.h"
 class FMultipleViewportsAdapter;
 
 class UWorld;
@@ -20,7 +21,7 @@ struct FEditorSettings
 	bool bDrawBatchLine = true;
 	bool bDrawPSGrid = false;
 	bool bEnableFXAA = true;
-	bool mEnableShadowPcf{};
+	EShadowFilterMode mShadowFilterMode{ EShadowFilterMode::None };
 	bool mEnableShadowCache{ true };
 	float mMinShadowCasterTexelRadius{ 1.0f };	// 그림자 맵에서 이 텍셀 반지름보다 작은 Caster는 제외. 0이면 끔
 	float Exposure = 1.0f;	// 톤 매핑 전에 HDR 색에 곱하는 노출 값

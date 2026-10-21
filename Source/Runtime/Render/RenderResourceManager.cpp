@@ -53,22 +53,29 @@ void FRenderResourceManager::LoadUberLit(const fs::path& ShaderRoot) {
 	UberLitDefault = DefaultProgram ? DefaultProgram->get() : nullptr;
 	const char* ModelDefines[]{ "LIGHTING_MODEL_GOURAUD", "LIGHTING_MODEL_LAMBERT", "LIGHTING_MODEL_BLINN_PHONG", "LIGHTING_MODEL_UNLIT", "WORLD_NORMAL" };
 	static_assert(std::size(ModelDefines) == static_cast<size_t>(EViewMode::Count));
-	for (uint32 PcfIndex{}; PcfIndex < 2; ++PcfIndex) {
+	for (int32 FilterIndex{}; FilterIndex < static_cast<int32>(EShadowFilterMode::Count); ++FilterIndex) {
+		const EShadowFilterMode FilterMode{ static_cast<EShadowFilterMode>(FilterIndex) };
 		for (int32 ModeIndex{}; ModeIndex < static_cast<int32>(EViewMode::Count); ++ModeIndex) {
-			const D3D_SHADER_MACRO Macros[]{ { ModelDefines[ModeIndex], "1" }, { "SHADOW_PCF", PcfIndex == 0 ? "0" : "1" }, { nullptr, nullptr } };
+			const D3D_SHADER_MACRO Macros[]{
+				{ ModelDefines[ModeIndex], "1" },
+				{ "SHADOW_PCF", FilterMode == EShadowFilterMode::PCF ? "1" : "0" },
+				{ "SHADOW_PCSS", FilterMode == EShadowFilterMode::PCSS ? "1" : "0" },
+				{ nullptr, nullptr }
+			};
 			LoadOrCompileShader(Path, Macros);
 			TUniquePtr<FShaderProgram>* Program{ ShaderProgramMap.Find(MakeShaderKey(Path, Macros)) };
-			mUberLitPrograms[PcfIndex][ModeIndex] = Program ? Program->get() : nullptr;
+			mUberLitPrograms[FilterIndex][ModeIndex] = Program ? Program->get() : nullptr;
 		}
 	}
 }
 
-FShaderProgram* FRenderResourceManager::GetUberLitProgram(EViewMode Mode, bool ShadowPcfEnabled) {
+FShaderProgram* FRenderResourceManager::GetUberLitProgram(EViewMode Mode, EShadowFilterMode ShadowFilterMode) {
 	const int32 Index{ static_cast<int32>(Mode) };
 	if (Index < 0 || Index >= static_cast<int32>(EViewMode::Count)) {
 		return nullptr;
 	}
-	return Get().mUberLitPrograms[ShadowPcfEnabled ? 1 : 0][Index];
+	const int32 FilterIndex{ static_cast<int32>(NormalizeShadowFilterMode(static_cast<int32>(ShadowFilterMode))) };
+	return Get().mUberLitPrograms[FilterIndex][Index];
 }
 
 bool FRenderResourceManager::IsUberLitProgram(const FShaderProgram* Program)
