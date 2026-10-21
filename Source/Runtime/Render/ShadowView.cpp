@@ -148,7 +148,7 @@ bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const F
 		BoundingSphereRadiusSqr = std::max(BoundingSphereRadiusSqr, FVector(SliceBounds.CascadeSliceFar[i] - BoundingSphereCenter).SizeSquared());
 		BoundingSphereRadiusSqr = std::max(BoundingSphereRadiusSqr, FVector(SliceBounds.CascadeSliceNear[i] - BoundingSphereCenter).SizeSquared());
 	}
-	const float BoundingSphereRadius = std::sqrt(BoundingSphereRadiusSqr);
+	const float BoundingSphereRadius = std::ceil(std::sqrt(BoundingSphereRadiusSqr));
 
 	if (OutSphereCenter) {
 		*OutSphereCenter = BoundingSphereCenter;
