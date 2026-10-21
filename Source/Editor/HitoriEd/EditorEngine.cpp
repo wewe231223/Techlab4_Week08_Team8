@@ -20,6 +20,7 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Actor/LightActorBase.h"
+#include "Engine/DirectionalLightSceneProxy.h"
 
 #include "Asset/AssetManager.h"
 #include "Render/RenderResourceManager.h"
@@ -112,6 +113,9 @@ bool UEditorEngine::Init()
 
 	DepthViewRenderer = MakeUnique<FDepthViewRenderer>();
 	DepthViewRenderer->Init();
+
+	CSMDebugRenderer = MakeUnique<FCSMDebugRenderer>();
+	CSMDebugRenderer->Init();
 
 	ToneMapRenderer = MakeUnique<FToneMapRenderer>();
 	ToneMapRenderer->Init();
@@ -409,7 +413,6 @@ void UEditorEngine::RenderMultipleViewports()
 	Renderer->SetLightDebugMode(SettingsPanel->GetSettings().LightDebugMode);
 	Renderer->SetLightCullingMode(static_cast<ELightCullingMode>(SettingsPanel->GetSettings().LightCullingMode));
 	Renderer->GetShadowRenderer().SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
-	Renderer->SetDebugCSM(SettingsPanel->GetSettings().bDebugCSM);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)
 	{
 		const bool bActive = MultipleViewportsAdapter.IsViewActive(ViewIndex);
@@ -431,9 +434,6 @@ void UEditorEngine::RenderMultipleViewports()
 			SCOPE_CYCLE_COUNTER(STAT_BuildRenderQueue);
 			MultipleViewportsAdapter.BuildRenderQueue(ViewIndex, RenderQueue, IconQueue, ArrowQueue);
 		}
-
-		const bool bViewOrtho = MultipleViewportsAdapter.IsOrthographic(ViewIndex);
-		Renderer->SetDebugCSM(SettingsPanel->GetSettings().bDebugCSM && !bViewOrtho);
 
 		RenderFrame(
 			ViewIndex,
@@ -466,9 +466,6 @@ void UEditorEngine::RenderMultipleViewports()
 			SCOPE_CYCLE_COUNTER(STAT_BuildRenderQueue);
 			MultipleViewportsAdapter.BuildRenderQueue(PIEViewIndex, RenderQueue, IconQueue, ArrowQueue);
 		}
-
-		const bool bPIEOrtho = MultipleViewportsAdapter.IsOrthographic(PIEViewIndex);
-		Renderer->SetDebugCSM(SettingsPanel->GetSettings().bDebugCSM && !bPIEOrtho);
 
 		RenderFrame(
 			PIEViewIndex,
@@ -659,6 +656,43 @@ void UEditorEngine::RenderFogPass(const int32 ViewIndex, UWorld& ViewWorld, cons
 	FogRenderer->OnRender(HDRInfo.DepthStencil.Texture, ViewProjection, ViewCameraLocation, SceneFogInfos[0].FogInfo);
 
 	//Fog는 여러개있더라도 1개의 Fog만 인식해서 그리도록 해야한다.
+
+	RenderCommand::EndRenderPass(PassInfo);
+}
+
+void UEditorEngine::RenderCSMDebugPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection)
+{
+	if (!SettingsPanel->GetSettings().bDebugCSM || MultipleViewportsAdapter.IsOrthographic(ViewIndex))
+		return;
+
+	const FDirectionalLightSceneProxy* DirProxy = nullptr;
+	for (const FDirectionalLightSceneProxy* Proxy : ViewWorld.GetScene().DirectionalLightProxies)
+	{
+		if (Proxy && Proxy->IsVisible() && Proxy->IsCSMEnabled() && Proxy->GetCascadeCount() > 1)
+		{
+			DirProxy = Proxy;
+			break;
+		}
+	}
+
+	if (!DirProxy || !CSMDebugRenderer)
+		return;
+
+	FRenderingInfo PassInfo = ViewRenderingInfo;
+	PassInfo.ColorRenderTargets[0].Texture = GetHDRTargetForView(ViewIndex);
+	for (FRenderingDesc& Color : PassInfo.ColorRenderTargets)
+		Color.LoadOp = ERenderTargetLoadOp::Load;
+
+	PassInfo.DepthStencil.Texture = nullptr;
+	RenderCommand::BeginRenderPass(PassInfo);
+
+	CSMDebugRenderer->OnRender(
+		ViewRenderingInfo.DepthStencil.Texture,
+		ViewProjection,
+		DirProxy->GetCascadeSplits(),
+		DirProxy->GetCascadeCount(),
+		DirProxy->GetCascadeTransitionFraction()
+	);
 
 	RenderCommand::EndRenderPass(PassInfo);
 }
@@ -984,6 +1018,9 @@ void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const 
 	}
 	else
 	{
+		// 1. CSM Debug Pass
+		RenderCSMDebugPass(ViewIndex, ViewWorld, ViewRenderingInfo, ViewProjection);
+
 		//직교인 경우 안개 Pass를 그리지 않는다.
 		if (!MultipleViewportsAdapter.IsOrthographic(ViewIndex) && SettingsPanel->GetSettings().bExponentialHeightFog)
 			// 2. 안개 Pass

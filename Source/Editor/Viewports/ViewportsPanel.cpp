@@ -1,4 +1,4 @@
-﻿#include "EnginePCH.h"
+#include "EnginePCH.h"
 #include "Editor/Viewports/ViewportsPanel.h"
 #include "Editor/LevelEditor/MultipleViewports/Adapter/MultipleViewportsAdapter.h"
 
@@ -412,6 +412,25 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 			FStatOverlay::GetObjectAllocationCount()), ValueColor});
 		Lines.Add({std::format("  Process {:.2f} MB",
 			static_cast<double>(FStatOverlay::GetProcessWorkingSetBytes()) / BytesPerMegabyte), ValueColor});
+	}
+
+	if (FStatOverlay::IsEnabled(EStatFlags::CSM))
+	{
+		const FCSMDebugSnapshot& CSMStats = FStatOverlay::GetCSMStats();
+		Lines.Add({"CSM", TitleColor});
+		Lines.Add({std::format("  Status: {}", CSMStats.bEnabled ? "Enabled" : "Disabled"), ValueColor});
+		if (CSMStats.bEnabled)
+		{
+			Lines.Add({std::format("  Cascades: {}", CSMStats.CascadeCount), ValueColor});
+			for (uint32 i = 0; i < CSMStats.CascadeCount && i < 4; ++i)
+			{
+				const FCascadeDebugInfo& Cascade = CSMStats.Cascades[i];
+				Lines.Add({std::format("  Cascade {}", i), TitleColor});
+				Lines.Add({std::format("    Near~Far: {:.2f} ~ {:.2f}", Cascade.Near, Cascade.Far), ValueColor});
+				Lines.Add({std::format("    Center:   ({:.2f}, {:.2f}, {:.2f})", Cascade.SphereCenter.X, Cascade.SphereCenter.Y, Cascade.SphereCenter.Z), ValueColor});
+				Lines.Add({std::format("    Radius:   {:.2f}", Cascade.SphereRadius), ValueColor});
+			}
+		}
 	}
 
 	struct FProfileStatLine

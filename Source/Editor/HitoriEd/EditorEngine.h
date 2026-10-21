@@ -15,6 +15,7 @@
 #include "Render/FXAARenderer.h"
 #include "Render/ToneMapRenderer.h"
 #include "Render/DepthViewRenderer.h"
+#include "Render/CSMDebugRenderer.h"
 
 
 #include "Editor/EditorUI/EditorUI.h"
@@ -108,6 +109,8 @@ private:
 	void RenderOpaquePass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue);
 	//안개에 대한 Pass
 	void RenderFogPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FVector& ViewCameraLocation,const FMatrix& ViewProjection, FRenderQueue& RenderQueue);
+	//CSM Debug Pass
+	void RenderCSMDebugPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection);
 	//Overlay Pass
 	void RenderOverlayPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue);
 	//FXAA Pass
@@ -150,6 +153,7 @@ private:
 	TUniquePtr<FFXAARenderer> FXAARenderer;
 	TUniquePtr<FToneMapRenderer> ToneMapRenderer;
 	TUniquePtr<FDepthViewRenderer> DepthViewRenderer;
+	TUniquePtr<FCSMDebugRenderer> CSMDebugRenderer;
 
 	UFont* SystemFont;
 

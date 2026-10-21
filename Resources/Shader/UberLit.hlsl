@@ -545,65 +545,6 @@ VS_OUTPUT mainVS(VS_INPUT Input)
     return Output;
 }
 
-float3 GetCSMCascadeColor(float3 WorldPos)
-{
-    if (bOrthographic != 0)
-    {
-        return float3(1.0f, 1.0f, 1.0f);
-    }
-
-    static const float3 CascadeColors[4] =
-    {
-        float3(1.0f, 0.25f, 0.25f), // Cascade 0: Red
-        float3(0.25f, 1.0f, 0.25f), // Cascade 1: Green
-        float3(0.25f, 0.25f, 1.0f), // Cascade 2: Blue
-        float3(1.0f, 1.0f, 0.25f)  // Cascade 3: Yellow
-    };
-
-    const float ViewDepth = mul(float4(WorldPos, 1.0f), ViewProjection).w;
-    for (uint LightIndex = 0; LightIndex < NumDirectionalLights; ++LightIndex)
-    {
-        const FDirectionalLightInfo Light = DirectionalLights[LightIndex];
-        if (Light.CascadeCount > 1 && Light.mShadowIndex >= 0)
-        {
-            int CascadeIdx = -1;
-            float NearSplit = 0.0f;
-            float FarSplit = 0.0f;
-
-            for (uint i = 0; i < Light.CascadeCount; ++i)
-            {
-                if (ViewDepth < Light.CascadeSplits[i])
-                {
-                    CascadeIdx = (int) i;
-                    FarSplit = Light.CascadeSplits[i];
-                    break;
-                }
-                NearSplit = Light.CascadeSplits[i];
-            }
-
-            if (CascadeIdx >= 0)
-            {
-                float3 Color = CascadeColors[min((uint) CascadeIdx, 3u)];
-                if (CascadeIdx < (int) Light.CascadeCount - 1 && Light.CascadeTransitionFraction > 0.0f)
-                {
-                    float CascadeRange = FarSplit - NearSplit;
-                    float DistToSplit = FarSplit - ViewDepth;
-                    float BlendRange = CascadeRange * Light.CascadeTransitionFraction;
-
-                    if (DistToSplit < BlendRange && BlendRange > 0.0f)
-                    {
-                        float BlendRatio = 1.0f - (DistToSplit / BlendRange);
-                        float3 NextColor = CascadeColors[min((uint) (CascadeIdx + 1), 3u)];
-                        Color = lerp(Color, NextColor, BlendRatio);
-                    }
-                }
-                return Color;
-            }
-        }
-    }
-    return float3(1.0f, 1.0f, 1.0f);
-}
-
 float4 mainPS(VS_OUTPUT Input) : SV_TARGET
 {
     const float2 UV = Input.UV + UVOffset;
@@ -658,12 +599,6 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
 #endif
 
     float3 FinalColor = Albedo.rgb * DiffuseLighting + SpecularLighting;
-#if !defined(EDITOR_ARROW_SHADER)
-    if (bDebugCSM != 0 && bOrthographic == 0 && mReceiveShadows != 0)
-    {
-        FinalColor *= GetCSMCascadeColor(Input.WorldPos);
-    }
-#endif
     return float4(FinalColor, Alpha);
 #endif
 }

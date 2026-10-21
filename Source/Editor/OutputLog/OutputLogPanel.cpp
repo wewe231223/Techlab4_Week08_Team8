@@ -2,6 +2,8 @@
 #include "Editor/OutputLog/OutputLogPanel.h"
 
 #include "Core/StatOverlay.h"
+#include "UObject/UObjectIterator.h"
+#include "Components/DirectionalLightComponent.h"
 
 static int TextEditCallbackStub(ImGuiInputTextCallbackData* data)
 {
@@ -17,6 +19,22 @@ static bool EqualsIgnoreCase(const FString& A, const char* B)
 	return Strnicmp(A.c_str(), B, static_cast<int>(A.size()) + 1) == 0;
 }
 
+static void Tokenize(const FString& Line, TArray<FString>& OutTokens)
+{
+	OutTokens.Reset();
+	uint64 Cursor = 0;
+	while (Cursor < Line.size())
+	{
+		while (Cursor < Line.size() && std::isspace(static_cast<unsigned char>(Line[Cursor])))
+			++Cursor;
+		const uint64 Start = Cursor;
+		while (Cursor < Line.size() && !std::isspace(static_cast<unsigned char>(Line[Cursor])))
+			++Cursor;
+		if (Cursor > Start)
+			OutTokens.Add(Line.substr(Start, Cursor - Start));
+	}
+}
+
 bool FOutputLogPanel::Init()
 {
 	ClearLog();
@@ -25,6 +43,7 @@ bool FOutputLogPanel::Init()
 	Commands.Add("HISTORY");
 	Commands.Add("CLEAR");
 	Commands.Add("STAT");
+	Commands.Add("CSM");
 
 	HistoryPos = -1;
 	InputBuf[0] = '\0';
@@ -175,6 +194,98 @@ void FOutputLogPanel::ExecCommand(const FString& CommandLine)
 		return;
 	}
 
+	// CSM On/Off 및 단계 조절 콘솔 명령어
+	TArray<FString> Tokens;
+	Tokenize(CommandLine, Tokens);
+	if (Tokens.Num() > 0 && EqualsIgnoreCase(Tokens[0], "csm"))
+	{
+		if (Tokens.Num() == 1)
+		{
+			FLog::Log(ELogVerbosity::Info, "Usage: csm <on|off|1|0> or csm count <2|3|4>");
+			ScrollToBottom = true;
+			return;
+		}
+
+		if (EqualsIgnoreCase(Tokens[1], "on") || Tokens[1] == "1")
+		{
+			int32 Modified = 0;
+			uint32 Count = 3;
+			for (TObjectIterator<UDirectionalLightComponent> It; It; ++It)
+			{
+				if (UDirectionalLightComponent* Light = *It)
+				{
+					Light->SetEnableCSM(true);
+					Count = Light->GetCascadeCount();
+					++Modified;
+				}
+			}
+			FCSMDebugSnapshot Snap = FStatOverlay::GetCSMStats();
+			Snap.bEnabled = true;
+			Snap.CascadeCount = Count;
+			FStatOverlay::UpdateCSMStats(Snap);
+
+			FLog::Log(ELogVerbosity::Info, "CSM Enabled ({} Directional Light(s) updated)", Modified);
+			ScrollToBottom = true;
+			return;
+		}
+		else if (EqualsIgnoreCase(Tokens[1], "off") || Tokens[1] == "0")
+		{
+			int32 Modified = 0;
+			for (TObjectIterator<UDirectionalLightComponent> It; It; ++It)
+			{
+				if (UDirectionalLightComponent* Light = *It)
+				{
+					Light->SetEnableCSM(false);
+					++Modified;
+				}
+			}
+			FCSMDebugSnapshot Snap{};
+			Snap.bEnabled = false;
+			Snap.CascadeCount = 0;
+			FStatOverlay::UpdateCSMStats(Snap);
+
+			FLog::Log(ELogVerbosity::Info, "CSM Disabled ({} Directional Light(s) updated)", Modified);
+			ScrollToBottom = true;
+			return;
+		}
+		else if (EqualsIgnoreCase(Tokens[1], "count"))
+		{
+			if (Tokens.Num() >= 3)
+			{
+				int32 Count = std::atoi(Tokens[2].c_str());
+				if (Count >= 2 && Count <= 4)
+				{
+					int32 Modified = 0;
+					for (TObjectIterator<UDirectionalLightComponent> It; It; ++It)
+					{
+						if (UDirectionalLightComponent* Light = *It)
+						{
+							Light->SetCascadeCount(static_cast<uint32>(Count));
+							++Modified;
+						}
+					}
+					FLog::Log(ELogVerbosity::Info, "CSM Cascade Count set to {} ({} Directional Light(s) updated)", Count, Modified);
+				}
+				else
+				{
+					FLog::Log(ELogVerbosity::Info, "Invalid count '{}'. Count must be between 2 and 4.", Tokens[2]);
+				}
+			}
+			else
+			{
+				FLog::Log(ELogVerbosity::Info, "Usage: csm count <2|3|4>");
+			}
+			ScrollToBottom = true;
+			return;
+		}
+		else
+		{
+			FLog::Log(ELogVerbosity::Info, "Unknown subcommand '{}'. Usage: csm <on|off> or csm count <2|3|4>", Tokens[1]);
+			ScrollToBottom = true;
+			return;
+		}
+	}
+
 	if (EqualsIgnoreCase(CommandLine, "CLEAR"))
 	{
 		ClearLog();
@@ -184,7 +295,8 @@ void FOutputLogPanel::ExecCommand(const FString& CommandLine)
 		FLog::Log(ELogVerbosity::Info, "Commands:");
 		for (const FString& Command : Commands)
 			FLog::Log(ELogVerbosity::Info, "- {}", Command);
-		OnLog(ELogVerbosity::Info, "- STAT <fps|memory|all|none>");
+		OnLog(ELogVerbosity::Info, "- STAT <fps|memory|profile|csm|all|none>");
+		OnLog(ELogVerbosity::Info, "- CSM <on|off> or CSM count <2|3|4>");
 	}
 	else if (EqualsIgnoreCase(CommandLine, "HISTORY"))
 	{

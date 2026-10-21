@@ -4,6 +4,7 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Math/Transform.h"
 #include "Render/ShadowView.h"
+#include "Core/StatOverlay.h"
 
 void FDirectionalLightSceneProxy::GetLightShaderParameters(FLightRenderParameters& Out) const {
 	const UDirectionalLightComponent* Dir{ static_cast<const UDirectionalLightComponent*>(LightComponent) };
@@ -25,6 +26,11 @@ bool FDirectionalLightSceneProxy::BuildShadowView(const FBox& CasterBounds, FSha
 	if (!IsVisible() || !Settings.mCastShadows) {
 		return false;
 	}
+
+	FCSMDebugSnapshot Snapshot{};
+	Snapshot.bEnabled = false;
+	Snapshot.CascadeCount = 0;
+	FStatOverlay::UpdateCSMStats(Snapshot);
 
 	const FTransform LightTransform{ LightComponent->GetWorldRotation(), LightComponent->GetWorldLocation() };
 	return BuildDirectionalShadowView(LightTransform, CasterBounds, Settings.mResolution, OutView);
@@ -67,26 +73,35 @@ bool FDirectionalLightSceneProxy::BuildShadowViews(const FBox& CasterBounds, FSh
 			WorldNearPos4.Z / WorldNearPos4.W
 		};
 		CamFrustumNearPoints.Add(WorldNearPos);
-
 	}
 
 	// CascadeCount에 따른 메인 카메라 분할 비율 구한다
 	float ShadowFar = std::min(MaxShadowDistance, CamContext.FarZ);
-	float ShadowNear = CamContext.NearZ;
+	float ShadowNear = std::max(CamContext.NearZ, 0.01f);
+	if (ShadowFar <= ShadowNear)
+	{
+		ShadowFar = ShadowNear + 1.0f;
+	}
 
 	TArray<float> SplitZRatio;
 	for (int i = 0; i <= CascadeCount; i++)
 	{
-		float LinearSplit = CamContext.NearZ + (ShadowFar - CamContext.NearZ) * ((float)i / CascadeCount);
-		float LogSplit = CamContext.NearZ * pow((ShadowFar / CamContext.NearZ), (float)i / CascadeCount);
-		float LerpedSplit = SplitLambda * LogSplit + (1 - SplitLambda) * LinearSplit;
+		float Fraction = static_cast<float>(i) / static_cast<float>(CascadeCount);
+		float LinearSplit = ShadowNear + (ShadowFar - ShadowNear) * Fraction;
+		float LogSplit = ShadowNear * pow((ShadowFar / ShadowNear), Fraction);
+		float LerpedSplit = SplitLambda * LogSplit + (1.0f - SplitLambda) * LinearSplit;
 		if (i > 0)
 		{
 			CascadeSplits[i-1] = LerpedSplit;
 		}
-		float SplitRatio = (LerpedSplit - CamContext.NearZ) / (CamContext.FarZ - CamContext.NearZ);
+		float Denom = CamContext.FarZ - CamContext.NearZ;
+		float SplitRatio = (std::abs(Denom) > 0.001f) ? (LerpedSplit - CamContext.NearZ) / Denom : Fraction;
 		SplitZRatio.Add(SplitRatio);
 	}	
+
+	FCSMDebugSnapshot Snapshot = FStatOverlay::GetCSMStats();
+	Snapshot.bEnabled = IsCSMEnabled();
+	Snapshot.CascadeCount = static_cast<uint32>(CascadeCount);
 
 	// Frustum 분할 비율에 따라 Orthogornal 직육면체 Frustum 생성
 	for (int i = 0; i < CascadeCount; i++)
@@ -101,11 +116,26 @@ bool FDirectionalLightSceneProxy::BuildShadowViews(const FBox& CasterBounds, FSh
 			SliceBounds.CascadeSliceNear[j] = CamFrustumNearPoints[j] + NearToFar * NearT;
 			SliceBounds.CascadeSliceFar[j] = CamFrustumNearPoints[j] + NearToFar * FarT;
 		}
-		if (!BuildDirectionalCascadeShadowView(LightTransform, CasterBounds, SliceBounds, Settings.mResolution, OutViews[i]))
+
+		FVector SphereCenter{};
+		float SphereRadius = 0.0f;
+
+		if (!BuildDirectionalCascadeShadowView(LightTransform, CasterBounds, SliceBounds, Settings.mResolution, OutViews[i], &SphereCenter, &SphereRadius))
 		{
+			FStatOverlay::UpdateCSMStats(Snapshot);
 			return false;
 		}
+
+		if (i < 4)
+		{
+			Snapshot.Cascades[i].Near = (i == 0) ? CamContext.NearZ : CascadeSplits[i - 1];
+			Snapshot.Cascades[i].Far = CascadeSplits[i];
+			Snapshot.Cascades[i].SphereCenter = SphereCenter;
+			Snapshot.Cascades[i].SphereRadius = SphereRadius;
+		}
 	}
+
+	FStatOverlay::UpdateCSMStats(Snapshot);
 
 	return true;
 }

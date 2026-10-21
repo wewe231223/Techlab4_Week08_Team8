@@ -1,8 +1,21 @@
-﻿#pragma once
+#pragma once
 
 #include "Types.h"
 #include "EngineString.h"
 
+struct FCascadeDebugInfo
+{
+	float Near = 0.0f;
+	float Far = 0.0f;
+	FVector SphereCenter;
+	float SphereRadius = 0.0f;
+};
+struct FCSMDebugSnapshot
+{
+	bool bEnabled = false;
+	uint32 CascadeCount = 0;
+	FCascadeDebugInfo Cascades[4];
+};
 // Overlay로 표시할 Stat 항목. 여러 항목을 동시에 켤 수 있어 비트 플래그로 둔다.
 enum class EStatFlags : uint32
 {
@@ -10,6 +23,7 @@ enum class EStatFlags : uint32
 	FPS     = 1 << 0,
 	Memory  = 1 << 1,
 	Profile = 1 << 2,
+	CSM		= 1 << 3,
 };
 DEFINE_ENUM_OPERATORS(EStatFlags)
 
@@ -39,6 +53,9 @@ public:
 	// 프로세스 전체가 점유한 물리 메모리(Working Set).
 	static uint64 GetProcessWorkingSetBytes();
 
+	static void UpdateCSMStats(const FCSMDebugSnapshot& InSnapshot) { CSMStats = InSnapshot; }
+	static const FCSMDebugSnapshot& GetCSMStats() { return CSMStats; }
+
 private:
 	// 표시 수치 갱신 주기(초). 너무 짧으면 숫자가 읽히지 않는다.
 	static constexpr float SampleInterval = 0.25f;
@@ -48,4 +65,6 @@ private:
 	inline static int32 AccumulatedFrames = 0;
 	inline static float DisplayFPS = 0.0f;
 	inline static float DisplayFrameTimeMs = 0.0f;
+
+	inline static FCSMDebugSnapshot CSMStats{};
 };

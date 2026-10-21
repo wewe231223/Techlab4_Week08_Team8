@@ -22,7 +22,7 @@ public:
 	ELightType GetLightType() const override { return ELightType::Directional; }
 
 	bool IsCSMEnabled() const { return bEnableCSM; }
-	void SetEnableCSM(bool bInEnable) { bEnableCSM = bInEnable; }
+	void SetEnableCSM(bool bInEnable);
 
 	uint32 GetCascadeCount() const { return CascadeCount; }
 	void SetCascadeCount(uint32 InCascadeCount) { CascadeCount = InCascadeCount; }

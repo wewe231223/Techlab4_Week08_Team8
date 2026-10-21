@@ -112,7 +112,7 @@ bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& Ca
 	return FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView);
 }
 
-bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const FBox& CasterBounds, const FCascadeSliceBounds& SliceBounds, int32 Resolution, FShadowView& OutView)
+bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const FBox& CasterBounds, const FCascadeSliceBounds& SliceBounds, int32 Resolution, FShadowView& OutView, FVector* OutSphereCenter, float* OutSphereRadius)
 {
 	// 빛의 기저 축 구하기
 	FVector Forward{};
@@ -149,6 +149,13 @@ bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const F
 		BoundingSphereRadiusSqr = std::max(BoundingSphereRadiusSqr, FVector(SliceBounds.CascadeSliceNear[i] - BoundingSphereCenter).SizeSquared());
 	}
 	const float BoundingSphereRadius = std::sqrt(BoundingSphereRadiusSqr);
+
+	if (OutSphereCenter) {
+		*OutSphereCenter = BoundingSphereCenter;
+	}
+	if (OutSphereRadius) {
+		*OutSphereRadius = BoundingSphereRadius;
+	}
 
 	const float BorderScale{ 1.0f + 2.0f / static_cast<float>(NormalizeShadowMapResolution(Resolution)) };
 	const float Width{ 2.0f * BoundingSphereRadius * BorderScale };

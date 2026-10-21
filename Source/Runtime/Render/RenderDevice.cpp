@@ -417,6 +417,17 @@ void FRenderDevice::CreateStates()
 		Desc.RenderTarget[0].BlendEnable = FALSE;
 		Desc.RenderTarget[0].RenderTargetWriteMask = 0;
 		Device->CreateBlendState(&Desc, BlendStates[(uint8)EBlendState::NoColorWrite].GetAddressOf());
+
+		// 곱셈 블렌딩 (디버그 오버레이: Dest * Src)
+		Desc.RenderTarget[0].BlendEnable = TRUE;
+		Desc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
+		Desc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+		Desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+		Desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+		Desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+		Desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+		Desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+		Device->CreateBlendState(&Desc, BlendStates[(uint8)EBlendState::Multiply].GetAddressOf());
 	}
 
 	// ---------- Sampler ----------
