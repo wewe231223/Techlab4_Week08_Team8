@@ -214,7 +214,26 @@ struct FLightContribution
 };
 
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal)
+#if SHADOW_PCSS
+float2 MakeDiskRotation(float2 PixelPosition)
+{
+    // 화면 픽셀 좌표로 고정된 임의 각도를 만든다. 시간값은 사용하지 않는다.
+    const float2 P = floor(PixelPosition);
+    const float Random = frac(52.9829189f * frac(dot(P, float2(0.06711056f, 0.00583715f))));
+    float S, C;
+    sincos(Random * 6.28318530718f, S, C);
+    return float2(C, S);
+}
+
+float2 RotateDisk(float2 Offset, float2 Rotation)
+{
+    return float2(
+        Offset.x * Rotation.x - Offset.y * Rotation.y,
+        Offset.x * Rotation.y + Offset.y * Rotation.x);
+}
+#endif
+
+float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal, float2 DiskRotation)
 {
     if (mReceiveShadows == 0 || ShadowIndex < 0 || (uint) ShadowIndex >= NumShadowMaps)
     {
@@ -278,7 +297,7 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal)
     for (int k = 0; k < PCSS_SAMPLES / 2; ++k)
     {
         // 중앙을 포함해 작은 차폐물을 놓치지 않는다. 타일 밖 깊이를 경계에 반복 누적하지 않는다.
-        const float2 Offset = k == 0 ? float2(0.0f, 0.0f) : StaticDisk[k];
+        const float2 Offset = k == 0 ? float2(0.0f, 0.0f) : RotateDisk(StaticDisk[k], DiskRotation);
         const float2 SampleUv = ShadowUv + Offset * SearchRadiusUv;
         if (any(SampleUv < 0.0f) || any(SampleUv > 1.0f))
         {
@@ -306,11 +325,15 @@ float CastShadow(int ShadowIndex, float3 WorldPos, float3 Normal)
         WorldToShadowUv * Parameters.mSourceAngleTanHalf * BlockerSeparation :
         WorldToShadowUv * Parameters.mSourceRadius * BlockerSeparation / max(BlockerAvgDepth, 1.0e-6f);
 
+    const float2 MinRadiusUV = {1.0e-6f,1.0e-6f};
+    const float2 FinalRadiusUV = max(MinRadiusUV, FilterRadiusUv);
+    
     float Visibility = { 0.0f };
     [unroll]
     for (int i = 0; i < PCSS_SAMPLES; ++i)
     {
-        const float2 SampleUv = ShadowUv + StaticDisk[i] * FilterRadiusUv;
+        const float2 Offset = RotateDisk(StaticDisk[i], DiskRotation);
+        const float2 SampleUv = ShadowUv + Offset * FilterRadiusUv;
         if (any(SampleUv < 0.0f) || any(SampleUv > 1.0f))
         {
             Visibility += 1.0f;
@@ -339,7 +362,7 @@ float SamplePointShadow(FShadowMapRenderParameters Parameters, float4 LightClip)
     return ShadowAtlas.SampleCmpLevelZero(ShadowSampler, AtlasUv, ShadowNdc.z);
 }
 
-float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal) {
+float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Normal, float2 DiskRotation) {
     if (mReceiveShadows == 0 || Light.mShadowIndex < 0 || NumShadowMaps < PointShadowFaceCount || (uint) Light.mShadowIndex > NumShadowMaps - PointShadowFaceCount) {
         return 1.0f;
     }
@@ -392,7 +415,7 @@ float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Norm
     [unroll]
     for (int k = 0; k < PCSS_SAMPLES / 2; ++k)
     {
-        const float2 Offset = k == 0 ? float2(0.0f, 0.0f) : StaticDisk[k];
+        const float2 Offset = k == 0 ? float2(0.0f, 0.0f) : RotateDisk(StaticDisk[k], DiskRotation);
         const float3 SampleDirection = ReceiverDirection + (Right * Offset.x - Up * Offset.y) * SearchRadius;
         const uint SampleFaceIndex = GetPointShadowFaceIndex(SampleDirection);
         const FShadowMapRenderParameters SampleParameters = ShadowMaps[FirstIndex + SampleFaceIndex];
@@ -427,7 +450,8 @@ float CastPointShadow(FLightRenderParameters Light, float3 WorldPos, float3 Norm
     [unroll]
     for (int i = 0; i < PCSS_SAMPLES; ++i)
     {
-        const float3 SampleDirection = ReceiverDirection + (Right * StaticDisk[i].x - Up * StaticDisk[i].y) * PenumbraRadiusWorld;
+        const float2 Offset = RotateDisk(StaticDisk[i], DiskRotation);
+        const float3 SampleDirection = ReceiverDirection + (Right * Offset.x - Up * Offset.y) * PenumbraRadiusWorld;
         const uint SampleFaceIndex = GetPointShadowFaceIndex(SampleDirection);
         const FShadowMapRenderParameters SampleParameters = ShadowMaps[FirstIndex + SampleFaceIndex];
         const float3 SamplePosition = Light.Position + normalize(SampleDirection) * ReceiverDistance;
@@ -487,21 +511,21 @@ float3 GetAmbientLighting()
 }
 
 // Directional Light의 영향을 구한다
-FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, float3 V, float3 WorldPos, float InShininess) {
+FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, float3 V, float3 WorldPos, float InShininess, float2 DiskRotation) {
     const float3 Radiance = { Light.Color * Light.Intensity };
     FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N) };
+    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N, DiskRotation) };
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif
     return Result;
 }
 
-FLightContribution AccumulateDirectionalLighting(float3 N, float3 V, float3 WorldPos, float InShininess) {
+FLightContribution AccumulateDirectionalLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float2 DiskRotation) {
     FLightContribution Total = { (FLightContribution) 0 };
     for (uint Index = { 0 }; Index < NumDirectionalLights; ++Index) {
-        const FLightContribution Contribution = { CalcDirectionalLight(DirectionalLights[Index], N, V, WorldPos, InShininess) };
+        const FLightContribution Contribution = { CalcDirectionalLight(DirectionalLights[Index], N, V, WorldPos, InShininess, DiskRotation) };
         Total.Diffuse += Contribution.Diffuse;
         Total.Specular += Contribution.Specular;
     }
@@ -578,7 +602,7 @@ FLightContribution CalcRectLight(FLightRenderParameters Light, float3 N, float3 
 }
 
 // Type에 따라 Point / Spot / Rect로 나눠 계산한다
-FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess)
+FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3 V, float3 WorldPos, float InShininess, float2 DiskRotation)
 {
     FLightContribution Result;
     if (Light.Type == LIGHT_TYPE_SPOT)
@@ -588,8 +612,8 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N) :
-        (Light.Type == LIGHT_TYPE_SPOT || Light.Type == LIGHT_TYPE_RECT) ? CastShadow(Light.mShadowIndex, WorldPos, N) : 1.0
+    const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N, DiskRotation) :
+        (Light.Type == LIGHT_TYPE_SPOT || Light.Type == LIGHT_TYPE_RECT) ? CastShadow(Light.mShadowIndex, WorldPos, N, DiskRotation) : 1.0
     };
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
@@ -639,7 +663,12 @@ float3 GetHeatmapColor(uint LightCount)
 // VS(Gouraud)는 픽셀 위치가 없어 셀을 쓸 수 없으므로 false로 호출한다.
 FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos, float InShininess, float4 SvPosition, bool bUseLightGrid)
 {
-    FLightContribution Total = { AccumulateDirectionalLighting(N, V, WorldPos, InShininess) };
+    float2 DiskRotation = float2(1.0f, 0.0f);
+#if SHADOW_PCSS && (defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG))
+    // 픽셀당 한 번 계산해 차폐물 탐색과 최종 필터에서 같은 회전값을 사용한다.
+    DiskRotation = MakeDiskRotation(SvPosition.xy);
+#endif
+    FLightContribution Total = { AccumulateDirectionalLighting(N, V, WorldPos, InShininess, DiskRotation) };
 
     uint LightCount = NumLocalLights;
     uint CellOffset = 0;
@@ -659,7 +688,7 @@ FLightContribution AccumulateDirectLighting(float3 N, float3 V, float3 WorldPos,
     for (uint Index = 0; Index < LightCount; ++Index)
     {
         const uint LightIndex = bUseCellList ? CellLightIndices[CellOffset + 1 + Index] : Index;
-        const FLightContribution LightContribution = CalcLocalLight(LocalLights[LightIndex], N, V, WorldPos, InShininess);
+        const FLightContribution LightContribution = CalcLocalLight(LocalLights[LightIndex], N, V, WorldPos, InShininess, DiskRotation);
         Total.Diffuse += LightContribution.Diffuse;
         Total.Specular += LightContribution.Specular;
     }
