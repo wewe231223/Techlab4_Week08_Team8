@@ -12,6 +12,7 @@
 #include "Math/BVH.h"
 #include "Render/FogInfo.h"
 #include "Render/Renderer.h"
+#include "Render/ShadowAtlas.h"
  
 struct FExponentialHeightFogSceneInfo
 {
@@ -38,6 +39,11 @@ public:
 
 	void RemoveAllLights();
 	void UpdateLights(FRenderer* Renderer);
+	FShadowAtlas& GetShadowAtlas();
+	uint64 BeginShadowUpdate();
+	void RemoveShadowCaster(const FPrimitiveSceneProxy* Caster);
+	void ResetShadowCasterTracking();
+	void RequestShadowAtlasReallocation(const ULightComponent* LightComponent);
 
 	void AddFogInfo(uint32 Id, const FFogInfo& FogInfo);
 	void RemoveFogInfo(uint32 Id);
@@ -73,4 +79,10 @@ public:
 	TArray<FLightRenderParameters>        LocalLightParameters;   // GPU 업로드용, 같은 순서
 	TArray<FDirectionalLightSceneProxy*>  DirectionalLightProxies;
 	TArray<USkyLightComponent*>           SkyLights;               // 프록시 없음
+
+private:
+	// Scene이 소유하는 그림자 아틀라스와 캐시.
+	FShadowAtlas mShadowAtlas{};
+	// 그림자 갱신 호출 번호. 프레임 번호와 별개로 증가한다.
+	uint64 mShadowUpdateSerial{};
 };

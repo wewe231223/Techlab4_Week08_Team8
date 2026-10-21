@@ -63,6 +63,10 @@ struct FDirectionalLightInfo
 	float Intensity;
 	FVector Color;
 	int32 mShadowIndex{ InvalidShadowMapIndex }; // 방향광이 참조할 FShadowMapRenderParameters 항목의 인덱스. 미할당은 -1이다.
+	uint32 mCascadeCount{ 1 };
+	FVector4 mCascadeSplits{};
+	float mCascadeTransitionFraction{};
+	float mPadding[2]{};
 };
 
 struct FPointLightInfo
@@ -94,7 +98,7 @@ struct FRectLightInfo
 	FVector Color; float Intensity;         	// 32
 	FVector Direction; float HalfWidth;         // 48  Direction = 로컬 +X (빛 진행 방향)
 	FVector Right; float HalfHeight;        	// 64  Right = 로컬 +Y
-	float BarnDoorCos; float BarnDoorSin;       
+	float BarnDoorCos; float BarnDoorSin;
 	float BarnDoorLength; float Padding;		// 80
 };
 
@@ -104,14 +108,17 @@ struct alignas(16) FLightingConstants
 	uint32 NumLocalLights;
 	uint32 mNumShadowMaps{};
 	uint32 mNumDirectionalLights{};
-	uint32 Padding{};
+	uint32 mDebugCSM{};
 };
 static_assert(sizeof(FLightingConstants) == 32);
 static_assert(offsetof(FLightingConstants, mNumDirectionalLights) == 24);
 
 static_assert(sizeof(FAmbientLightInfo) == 16);
-static_assert(sizeof(FDirectionalLightInfo) == 32);
+static_assert(sizeof(FDirectionalLightInfo) == 64);
 static_assert(offsetof(FDirectionalLightInfo, mShadowIndex) == 28);
+static_assert(offsetof(FDirectionalLightInfo, mCascadeCount) == 32);
+static_assert(offsetof(FDirectionalLightInfo, mCascadeSplits) == 36);
+static_assert(offsetof(FDirectionalLightInfo, mCascadeTransitionFraction) == 52);
 static_assert(sizeof(FPointLightInfo) == 48);
 static_assert(sizeof(FSpotLightInfo) == 64);
 static_assert(sizeof(FRectLightInfo) == 80);
@@ -236,12 +243,14 @@ public:
 	EViewMode GetViewMode() const { return CurrentViewMode; }
 
 	// DepthTexture는 Tiled25D에서만 쓴다. 이때는 DSV에서 풀린 상태(RenderDepth 뒤 EndRenderPass)여야 한다.
-	void CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture2D* DepthTexture = nullptr);
+	void CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture* DepthTexture = nullptr);
 
 	// public
 	void SetLightDebugMode(uint32 Mode);
 	void SetLightCullingMode(ELightCullingMode Mode) { LightCullingMode = Mode; }
 	ELightCullingMode GetLightCullingMode() const { return LightCullingMode; }
+	void SetDebugCSM(bool Enabled);
+	bool IsDebugCSMEnabled() const;
 private:
 	void DrawPackets(uint32 Begin, uint32 End, const FMatrix& ViewProjection);
 	void DrawStaticGroups();
@@ -260,6 +269,7 @@ private:
 	// NumTilesX = 0인 b5. 2.5D 목록은 불투명 깊이 기준이라 반투명은 이것으로 전체 순회한다.
 	TUniquePtr<FConstantBuffer> GridLightingFallbackCB{};
 	uint32 LightDebugMode{};
+	bool mDebugCSM{};
 	ELightCullingMode LightCullingMode = ELightCullingMode::Clustered;
 	// RenderDepth 동안 true. BindMaterial이 PS를 끈다.
 	bool bDepthOnly = false;

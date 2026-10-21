@@ -1,10 +1,11 @@
-﻿#include "EnginePCH.h"
+#include "EnginePCH.h"
 #include "Editor/Viewports/ViewportsPanel.h"
 #include "Editor/LevelEditor/MultipleViewports/Adapter/MultipleViewportsAdapter.h"
 
 #include "Core/StatOverlay.h"
 #include "Core/Stats/LightweightStats.h"
 #include "Render/RenderCommand.h"
+#include "Render/GraphicsMemoryStats.h"
 
 #include <algorithm>
 #include <cassert>
@@ -414,6 +415,53 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 			static_cast<double>(FStatOverlay::GetProcessWorkingSetBytes()) / BytesPerMegabyte), ValueColor});
 	}
 
+	if (FStatOverlay::IsEnabled(EStatFlags::GPUMemory) || FStatOverlay::IsEnabled(EStatFlags::Memory)) {
+		constexpr ImU32 OverBudgetColor{ IM_COL32(255, 90, 90, 255) };
+		const uint64 TextureBytes{ FGraphicsMemoryStats::GetTextureBytes() };
+		const uint64 BufferBytes{ FGraphicsMemoryStats::GetBufferBytes() };
+		Lines.Add({ "GPU Resources (Logical Size)", TitleColor });
+		Lines.Add({ std::format("  Tracked total {:.2f} MiB", static_cast<double>(TextureBytes + BufferBytes) / BytesPerMegabyte), ValueColor });
+		Lines.Add({ std::format("  Textures      {:.2f} MiB ({} resources)", static_cast<double>(TextureBytes) / BytesPerMegabyte, FGraphicsMemoryStats::GetTextureCount()), ValueColor });
+		Lines.Add({ std::format("  Buffers       {:.2f} MiB ({} resources)", static_cast<double>(BufferBytes) / BytesPerMegabyte, FGraphicsMemoryStats::GetBufferCount()), ValueColor });
+		if (const uint64 UnmeasuredCount{ FGraphicsMemoryStats::GetUnmeasuredResourceCount() }; UnmeasuredCount != 0) {
+			Lines.Add({ std::format("  Unmeasured resources: {}", UnmeasuredCount), OverBudgetColor });
+		}
+		Lines.Add({ "GPU Memory (DXGI Used / Budget)", TitleColor });
+		if (FStatOverlay::HasGPULocalMemoryInfo()) {
+			const uint64 Usage{ FStatOverlay::GetGPULocalUsageBytes() };
+			const uint64 Budget{ FStatOverlay::GetGPULocalBudgetBytes() };
+			const ImU32 Color{ Usage > Budget ? OverBudgetColor : ValueColor };
+			Lines.Add({ std::format("  Local     {:.2f} / {:.2f} MiB", static_cast<double>(Usage) / BytesPerMegabyte, static_cast<double>(Budget) / BytesPerMegabyte), Color });
+		} else {
+			Lines.Add({ "  Local     N/A", ValueColor });
+		}
+
+		if (FStatOverlay::HasGPUNonLocalMemoryInfo()) {
+			const uint64 Usage{ FStatOverlay::GetGPUNonLocalUsageBytes() };
+			const uint64 Budget{ FStatOverlay::GetGPUNonLocalBudgetBytes() };
+			const ImU32 Color{ Usage > Budget ? OverBudgetColor : ValueColor };
+			Lines.Add({ std::format("  Non-local {:.2f} / {:.2f} MiB", static_cast<double>(Usage) / BytesPerMegabyte, static_cast<double>(Budget) / BytesPerMegabyte), Color });
+		} else {
+			Lines.Add({ "  Non-local N/A", ValueColor });
+		}
+	}
+
+	if (FStatOverlay::IsEnabled(EStatFlags::CSM)) {
+		const FCSMDebugSnapshot& CSMStats{ FStatOverlay::GetCSMStats() };
+		Lines.Add({"CSM", TitleColor});
+		Lines.Add({std::format("  Status: {}", CSMStats.mEnabled ? "Enabled" : "Disabled"), ValueColor});
+		if (CSMStats.mEnabled) {
+			Lines.Add({std::format("  Cascades: {}", CSMStats.mCascadeCount), ValueColor});
+			for (uint32 Index{}; Index < CSMStats.mCascadeCount && Index < 4; ++Index) {
+				const FCascadeDebugInfo& Cascade{ CSMStats.mCascades[Index] };
+				Lines.Add({std::format("  Cascade {}", Index), TitleColor});
+				Lines.Add({std::format("    Near~Far: {:.2f} ~ {:.2f}", Cascade.mNear, Cascade.mFar), ValueColor});
+				Lines.Add({std::format("    Center:   ({:.2f}, {:.2f}, {:.2f})", Cascade.mSphereCenter.X, Cascade.mSphereCenter.Y, Cascade.mSphereCenter.Z), ValueColor});
+				Lines.Add({std::format("    Radius:   {:.2f}", Cascade.mSphereRadius), ValueColor});
+			}
+		}
+	}
+
 	struct FProfileStatLine
 	{
 		FString Text;
@@ -541,7 +589,7 @@ void FViewportsPanel::ResizeSlot(FViewSlot& Slot, const uint32 Width, const uint
 	Slot.DepthTarget = RenderCommand::CreateTexture2D(Desc);
 
 	// HDR Target
-	Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;	
+	Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	Desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	Slot.HDRTarget = RenderCommand::CreateTexture2D(Desc);
 

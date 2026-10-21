@@ -516,7 +516,7 @@ void FRenderer::EndObjectConstants()
 void FRenderer::BindMaterial(UMaterial* Material) {
 	FShaderProgram* Program{ Material->Shader };
 	if (FRenderResourceManager::IsUberLitProgram(Program)) {
-		if (FShaderProgram* Variant{ FRenderResourceManager::GetUberLitProgram(CurrentViewMode, mShadowRenderer.IsShadowPcfEnabled()) }) {
+		if (FShaderProgram* Variant{ FRenderResourceManager::GetUberLitProgram(CurrentViewMode, mShadowRenderer.GetShadowFilterMode()) }) {
 			Program = Variant;
 		}
 	}
@@ -630,6 +630,7 @@ void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<
 
 	LightingConstants.NumLocalLights = NumLocalLightsThisFrame;
 	LightingConstants.mNumShadowMaps = mShadowRenderer.GetShadowMapCount();
+	LightingConstants.mDebugCSM = mDebugCSM ? 1u : 0u;
 	RenderCommand::UpdateBufferData(LightingCB.get(), &LightingConstants, sizeof(FLightingConstants));
 
 	// CullLights 전에는 NumTilesX = 0으로 두어 PS가 셀 버퍼 대신 전체 순회를 쓰게 한다.
@@ -638,7 +639,7 @@ void FRenderer::SetLighting(FLightingConstants& LightingConstants, const TArray<
 	RenderCommand::UpdateBufferData(GridLightingCB.get(), &GridConstants, sizeof(FLightGridConstants));
 }
 
-void FRenderer::CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture2D* DepthTexture)
+void FRenderer::CullLights(const FMatrix& View, const FMatrix& Projection, uint32 Width, uint32 Height, FTexture* DepthTexture)
 {
 	// 반투명(2.5D)과 컬링 전 경로가 쓰는 전체 순회용 b5. 디버그 모드만 반영한다.
 	FLightGridConstants FallbackConstants{};
@@ -738,4 +739,12 @@ FShadowRenderer& FRenderer::GetShadowRenderer() {
 
 const FShadowRenderer& FRenderer::GetShadowRenderer() const {
 	return mShadowRenderer;
+}
+
+void FRenderer::SetDebugCSM(bool Enabled) {
+	mDebugCSM = Enabled;
+}
+
+bool FRenderer::IsDebugCSMEnabled() const {
+	return mDebugCSM;
 }

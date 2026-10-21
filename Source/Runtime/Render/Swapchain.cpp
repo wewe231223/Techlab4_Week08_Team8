@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Swapchain.h"
+#include "Texture2D.h"
 
 #include "Core/Window.h"
 

@@ -5,6 +5,7 @@
 #include "ShadowMap.h"
 
 class ULightComponent;
+class FLightSceneProxy;
 struct FBox;
 struct FTransform;
 
@@ -20,6 +21,7 @@ struct FShadowView {
 	FVector mWorldPosition{};
 	// 그림자 카메라에서 근평면까지의 전방 거리. 투영 행렬의 깊이 범위와 일치해야 하며, LOD 계산과 뷰 유효성 검사에 사용한다.
 	float mNearPlane{};
+	float mFarPlane{};
 	// LOD 계산에 직교 투영 방식을 사용할지 여부. 방향성 조명은 true, 나머지는 false이며, 이 값 자체가 투영 행렬을 변경하지는 않는다.
 	bool mIsOrthographic{ true };
 	// 포인트 라이트의 전방향 그림자를 구성하는 뷰인지 여부. LOD 계산 시 각 면의 전방 대신 광원에서 물체로 향하는 방향을 사용한다.
@@ -38,9 +40,24 @@ struct FShadowMapRequest {
 	FLightShadowSettings mSettings{};
 	// 요청을 만든 조명을 식별하는 비소유 포인터. 생성된 그림자 데이터의 시작 인덱스와 뷰 수를 조명별로 저장하고 조회하는 키로 사용한다.
 	const ULightComponent* mLightComponent{};
+	// 맵별 Caster 목록과 재사용 조건 평가를 담당하는 비소유 프록시.
+	FLightSceneProxy* mLightProxy{};
+};
+
+struct FShadowCameraContext {
+	float mNearZ{};
+	float mFarZ{};
+	FVector mCameraPosition{};
+	FMatrix mViewProjection{ FMatrix::Identity };
+};
+
+struct FCascadeSliceBounds {
+	FVector mCascadeSliceNear[4]{};
+	FVector mCascadeSliceFar[4]{};
 };
 
 bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView);
+bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const FBox& CasterBounds, const FCascadeSliceBounds& SliceBounds, int32 Resolution, FShadowView& OutView, FVector* OutSphereCenter = nullptr, float* OutSphereRadius = nullptr);
 bool BuildSpotShadowView(const FTransform& LightTransform, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView);
 bool BuildRectShadowView(const FTransform& LightTransform, float HalfWidth, float HalfHeight, float AttenuationRadius, FShadowView& OutView);
 bool BuildPointShadowViews(const FTransform& LightTransform, float AttenuationRadius, FShadowView (&OutViews)[PointShadowFaceCount]);

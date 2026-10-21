@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "Shader.h"
 #include "Texture2D.h"
+#include "Texture2DArray.h"
 #include "TextureCube.h"
 #include "RenderingInfo.h"
 
@@ -78,6 +79,11 @@ TUniquePtr<FTexture2D> RenderCommand::CreateTexture2D(const D3D11_TEXTURE2D_DESC
 {
 	assert(RenderDevice);
 	return RenderDevice->CreateTexture2D(Desc, InitialData);
+}
+
+TUniquePtr<FTexture2DArray> RenderCommand::CreateTexture2DArray(const D3D11_TEXTURE2D_DESC& Desc, const D3D11_SUBRESOURCE_DATA* InitialData) {
+	assert(RenderDevice);
+	return RenderDevice->CreateTexture2DArray(Desc, InitialData);
 }
 
 TUniquePtr<FTexture2D> RenderCommand::LoadDDSTexture(const FString& Path) {
@@ -215,9 +221,9 @@ void RenderCommand::Unmap(FBuffer* InBuffer)
 	RenderDevice->GetContext()->Unmap(InBuffer->GetBuffer(), 0);
 }
 
-void RenderCommand::BindShaderResource(uint32 Slot, FTexture2D* Texture2D, EShaderBindFlagBits FlagBits)
+void RenderCommand::BindShaderResource(uint32 Slot, FTexture* Texture2D, EShaderBindFlagBits FlagBits)
 {
-	ID3D11ShaderResourceView* SRV = Texture2D->GetSRV();
+	ID3D11ShaderResourceView* SRV = Texture2D ? Texture2D->GetSRV() : nullptr;
 	BindShaderResource(Slot, SRV, FlagBits);
 }
 
@@ -232,7 +238,7 @@ void RenderCommand::UnbindShaderResource(uint32 Slot, EShaderBindFlagBits FlagBi
 	BindShaderResource(Slot, NullSRV, FlagBits);
 }
 
-void RenderCommand::CopyTexture(FTexture2D* Dst, FTexture2D* Src)
+void RenderCommand::CopyTexture(FTexture* Dst, FTexture* Src)
 {
 	RenderDevice->GetContext()->CopyResource(Dst->GetRawPtr(), Src->GetRawPtr());
 }
@@ -245,19 +251,19 @@ void RenderCommand::BeginRenderPass(const FRenderingInfo& RenderingInfo)
 		FClearValue ClearValue = RenderTargetDesc.ClearValue;
 		if (RenderTargetDesc.LoadOp == ERenderTargetLoadOp::Clear)
 		{
-			RenderDevice->GetContext()->ClearRenderTargetView(RenderTargetDesc.Texture->GetRTV(), &RenderTargetDesc.ClearValue.ColorClearValue.V[0]);
+			RenderDevice->GetContext()->ClearRenderTargetView(RenderTargetDesc.Texture->GetRTV(RenderTargetDesc.ArraySlice), &RenderTargetDesc.ClearValue.ColorClearValue.V[0]);
 		}
-		RTVs.Add(RenderTargetDesc.Texture->GetRTV());
+		RTVs.Add(RenderTargetDesc.Texture->GetRTV(RenderTargetDesc.ArraySlice));
 	}
 
 	ID3D11DepthStencilView* DSV = nullptr;
 	if (RenderingInfo.DepthStencil.Texture != nullptr)
 	{
 		FClearValue dsvClearValue = RenderingInfo.DepthStencil.ClearValue;
-		DSV = RenderingInfo.DepthStencil.Texture->GetDSV();
+		DSV = RenderingInfo.DepthStencil.Texture->GetDSV(RenderingInfo.DepthStencil.ArraySlice);
 		if (RenderingInfo.DepthStencil.LoadOp == ERenderTargetLoadOp::Clear)
 		{
-			RenderDevice->GetContext()->ClearDepthStencilView(RenderingInfo.DepthStencil.Texture->GetDSV(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, dsvClearValue.DepthClearValue, dsvClearValue.StencilClearValue);
+			RenderDevice->GetContext()->ClearDepthStencilView(RenderingInfo.DepthStencil.Texture->GetDSV(RenderingInfo.DepthStencil.ArraySlice), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, dsvClearValue.DepthClearValue, dsvClearValue.StencilClearValue);
 		}
 	}
 	RenderDevice->GetContext()->OMSetRenderTargets((uint32)RTVs.Num(), RTVs.GetData(), DSV);
@@ -274,14 +280,18 @@ void RenderCommand::EndRenderPass(const FRenderingInfo& RenderingInfo)
 	RenderDevice->GetContext()->OMSetRenderTargets(0, nullptr, nullptr);
 }
 
-void RenderCommand::ClearDepthStencil(FTexture2D* DepthStencilTexture, float Depth, uint8 Stencil)
+void RenderCommand::ClearDepthStencil(FTexture* DepthStencilTexture, float Depth, uint8 Stencil, uint32 ArraySlice)
 {
 	if (DepthStencilTexture == nullptr)
 	{
 		return;
 	}
 
-	RenderDevice->GetContext()->ClearDepthStencilView(DepthStencilTexture->GetDSV(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
+	ID3D11DepthStencilView* DSV{ DepthStencilTexture->GetDSV(ArraySlice) };
+	if (!DSV) {
+		return;
+	}
+	RenderDevice->GetContext()->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
 
 void RenderCommand::SetViewport(uint32 InX, uint32 InY, uint32 InWidth, uint32 InHeight)

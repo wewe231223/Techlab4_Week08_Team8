@@ -20,6 +20,7 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Actor/LightActorBase.h"
+#include "Engine/DirectionalLightSceneProxy.h"
 
 #include "Asset/AssetManager.h"
 #include "Render/RenderResourceManager.h"
@@ -27,6 +28,7 @@
 #include "Render/RenderCommand.h"
 #include "Editor/Outliner/OutlinerPanel.h"
 #include "Editor/HitoriEd/EditorFileUtils.h"
+#include "Editor/ShadowAtlas/ShadowAtlasPanel.h"
 #include "UObject/UObjectIterator.h"
 
 #include "Core/EngineLog.h"
@@ -113,6 +115,9 @@ bool UEditorEngine::Init()
 	DepthViewRenderer = MakeUnique<FDepthViewRenderer>();
 	DepthViewRenderer->Init();
 
+	mCSMDebugRenderer = MakeUnique<FCSMDebugRenderer>();
+	mCSMDebugRenderer->Init();
+
 	ToneMapRenderer = MakeUnique<FToneMapRenderer>();
 	ToneMapRenderer->Init();
 
@@ -120,6 +125,9 @@ bool UEditorEngine::Init()
 	// 필요한 Panel들 추가후 raw pointer 반환(소유권 = EditorUI)
 	DetailsPanel = EditorUI->AddEditorPanel<FDetailsPanel>();
 	DetailsPanel->SetShadowRenderer(&Renderer->GetShadowRenderer());
+	FShadowAtlasPanel* ShadowAtlasPanel{ EditorUI->AddEditorPanel<FShadowAtlasPanel>() };
+	ShadowAtlasPanel->SetShadowRenderer(&Renderer->GetShadowRenderer());
+	OutputLogPanel->SetShadowAtlasPanel(ShadowAtlasPanel);
 	EditorControlsPanel = EditorUI->AddEditorPanel<FEditorControlsPanel>();
 	ViewportsPanel = EditorUI->AddEditorPanel<FViewportsPanel>();
 	ContentDrawerPanel = EditorUI->AddEditorPanel<FContentDrawerPanel>();
@@ -141,7 +149,7 @@ bool UEditorEngine::Init()
 	TextRenderer = MakeUnique<FTextRenderer>();
 	TextRenderer->Init();
 
-	// 투영 행렬 생성 
+	// 투영 행렬 생성
 	MultipleViewportsAdapter.InitializeFromWorld(*GetActiveWorld());
 	// 화면 나눔 비율 설정 가져오기
 	MultipleViewportsAdapter.SetSplitRatio({
@@ -408,7 +416,9 @@ void UEditorEngine::RenderMultipleViewports()
 	UWorld* CapturedWorld = nullptr;
 	Renderer->SetLightDebugMode(SettingsPanel->GetSettings().LightDebugMode);
 	Renderer->SetLightCullingMode(static_cast<ELightCullingMode>(SettingsPanel->GetSettings().LightCullingMode));
-	Renderer->GetShadowRenderer().SetShadowPcfEnabled(SettingsPanel->GetSettings().mEnableShadowPcf);
+	Renderer->GetShadowRenderer().SetShadowFilterMode(SettingsPanel->GetSettings().mShadowFilterMode);
+	Renderer->GetShadowRenderer().SetShadowCacheEnabled(SettingsPanel->GetSettings().mEnableShadowCache);
+	Renderer->GetShadowRenderer().SetMinShadowCasterTexelRadius(SettingsPanel->GetSettings().mMinShadowCasterTexelRadius);
 	for (int32 ViewIndex = 0; ViewIndex < 4; ++ViewIndex)
 	{
 		const bool bActive = MultipleViewportsAdapter.IsViewActive(ViewIndex);
@@ -438,6 +448,8 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.GetEngineViewProjection(ViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraLocation(ViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraForward(ViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraNearClip(ViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraFarClip(ViewIndex),
 			RenderQueue, IconQueue, ArrowQueue);
 
 
@@ -468,6 +480,8 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.GetEngineViewProjection(PIEViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraLocation(PIEViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraForward(PIEViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraNearClip(PIEViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraFarClip(PIEViewIndex),
 			RenderQueue, IconQueue, ArrowQueue);
 		CopyPIEWindowToBackbuffer();
 	}
@@ -580,7 +594,7 @@ void UEditorEngine::RenderOpaquePass(const int32 ViewIndex, const FRenderingInfo
 		Renderer->RenderQueueSorting(RenderQueue, ViewProjection, ViewCameraLocation);
 
 		// 2.5D는 타일의 실제 깊이가 필요하므로 불투명 깊이를 먼저 채운 뒤 컬링한다.
-		FTexture2D* DepthTexture = ViewRenderingInfo.DepthStencil.Texture;
+		FTexture* DepthTexture = ViewRenderingInfo.DepthStencil.Texture;
 		const bool bDepthPrepass = Renderer->GetLightCullingMode() == ELightCullingMode::Tiled25D && DepthTexture;
 		if (bDepthPrepass)
 		{
@@ -648,6 +662,34 @@ void UEditorEngine::RenderFogPass(const int32 ViewIndex, UWorld& ViewWorld, cons
 	FogRenderer->OnRender(HDRInfo.DepthStencil.Texture, ViewProjection, ViewCameraLocation, SceneFogInfos[0].FogInfo);
 
 	//Fog는 여러개있더라도 1개의 Fog만 인식해서 그리도록 해야한다.
+
+	RenderCommand::EndRenderPass(PassInfo);
+}
+
+void UEditorEngine::RenderCSMDebugPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection) {
+	if (!SettingsPanel->GetSettings().mDebugCSM || MultipleViewportsAdapter.IsOrthographic(ViewIndex))
+		return;
+
+	const FDirectionalLightSceneProxy* DirProxy{};
+	for (const FDirectionalLightSceneProxy* Proxy : ViewWorld.GetScene().DirectionalLightProxies) {
+		if (Proxy && Proxy->IsVisible() && Proxy->IsCSMEnabled() && Proxy->GetCascadeCount() > 1) {
+			DirProxy = Proxy;
+			break;
+		}
+	}
+
+	if (!DirProxy || !mCSMDebugRenderer)
+		return;
+
+	FRenderingInfo PassInfo{ ViewRenderingInfo };
+	PassInfo.ColorRenderTargets[0].Texture = GetHDRTargetForView(ViewIndex);
+	for (FRenderingDesc& Color : PassInfo.ColorRenderTargets)
+		Color.LoadOp = ERenderTargetLoadOp::Load;
+
+	PassInfo.DepthStencil.Texture = nullptr;
+	RenderCommand::BeginRenderPass(PassInfo);
+
+	mCSMDebugRenderer->OnRender(ViewRenderingInfo.DepthStencil.Texture, ViewProjection, DirProxy->GetCascadeSplits(), Renderer->GetShadowRenderer().GetShadowMapViewCount(DirProxy->GetLightComponent()), DirProxy->GetCascadeTransitionFraction());
 
 	RenderCommand::EndRenderPass(PassInfo);
 }
@@ -728,7 +770,7 @@ void UEditorEngine::RenderOverlayPass(const int32 ViewIndex, UWorld& ViewWorld, 
 		// 아이콘 먼저 그리기 (반투명)
 		Renderer->RenderQueueSorting(IconQueue, ViewProjection, ViewCameraLocation);
 		Renderer->RenderTranslucent(ViewProjection);
-		
+
 		// 화살표 그리기 (불투명)
 		Renderer->RenderQueueSorting(ArrowQueue, ViewProjection, ViewCameraLocation);
 		Renderer->RenderOpaque(ViewProjection);
@@ -817,7 +859,7 @@ void UEditorEngine::RenderOverlayPass(const int32 ViewIndex, UWorld& ViewWorld, 
 
 void UEditorEngine::RenderFXAAPass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo)
 {
-	FTexture2D* SceneColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
+	FTexture* SceneColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
 	FTexture2D* FxaaTarget = GetFxaaTargetForView(ViewIndex);   // 뷰별 임시 텍스처
 	if (!SceneColor || !FxaaTarget)
 		return;
@@ -845,7 +887,7 @@ void UEditorEngine::RenderFXAAPass(const int32 ViewIndex, const FRenderingInfo& 
 
 void UEditorEngine::RenderToneMapPass(const int32 ViewIndex, const FRenderingInfo& ViewRenderingInfo)
 {
-	FTexture2D* LDRColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
+	FTexture* LDRColor = ViewRenderingInfo.ColorRenderTargets[0].Texture;
 	FTexture2D* HDRColor = GetHDRTargetForView(ViewIndex);   // 뷰별 임시 텍스처
 	if (!LDRColor || !HDRColor)
 		return;
@@ -947,12 +989,18 @@ void UEditorEngine::UpdateGizmoAndPicking()
 }
 
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
-void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
+void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, const float ViewCameraNearZ, const float ViewCameraFarZ, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
 	FScene& Scene{ ViewWorld.GetScene() };
 	FShadowRenderer& ShadowRenderer{ Renderer->GetShadowRenderer() };
 	const EViewMode ViewMode{ MultipleViewportsAdapter.GetViewMode(ViewIndex) };
 	if (ViewMode == EViewMode::Lit_Lambert || ViewMode == EViewMode::Lit_BlinnPhong) {
-		ShadowRenderer.Render(Scene);
+		FShadowCameraContext CameraContext{};
+		CameraContext.mCameraPosition = ViewCameraLocation;
+		CameraContext.mViewProjection = ViewProjection;
+		CameraContext.mNearZ = ViewCameraNearZ;
+		CameraContext.mFarZ = ViewCameraFarZ;
+
+		ShadowRenderer.Render(Scene, CameraContext);
 	} else {
 		ShadowRenderer.Reset();
 	}
@@ -967,6 +1015,9 @@ void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const 
 	}
 	else
 	{
+		// 1. CSM Debug Pass
+		RenderCSMDebugPass(ViewIndex, ViewWorld, ViewRenderingInfo, ViewProjection);
+
 		//직교인 경우 안개 Pass를 그리지 않는다.
 		if (!MultipleViewportsAdapter.IsOrthographic(ViewIndex) && SettingsPanel->GetSettings().bExponentialHeightFog)
 			// 2. 안개 Pass
@@ -1197,7 +1248,7 @@ void UEditorEngine::CopyPIEWindowToBackbuffer()
 
 	// 백버퍼는 SRV가 없어 FXAA·Fog 입력으로 쓸 수 없으므로 오프스크린 결과를 통째로 복사한다.
 	// 창 크기 변경 직후 한 프레임은 크기가 어긋날 수 있어 그때는 건너뛴다.
-	FTexture2D* Backbuffer = BackbufferInfo.ColorRenderTargets[0].Texture;
+	FTexture* Backbuffer = BackbufferInfo.ColorRenderTargets[0].Texture;
 	if (!Backbuffer || !PIEColorTarget ||
 		BackbufferInfo.ViewportSetting.Width != PIETargetWidth ||
 		BackbufferInfo.ViewportSetting.Height != PIETargetHeight)

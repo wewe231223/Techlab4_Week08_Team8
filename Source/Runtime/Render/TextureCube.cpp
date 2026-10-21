@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "TextureCube.h"
+#include "GraphicsMemoryStats.h"
 
 FTextureCube::FTextureCube(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const TArray<const void*>& InitialDatas)
 {
@@ -28,6 +29,7 @@ FTextureCube::FTextureCube(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InD
 		return;
 	}
 
+	FGraphicsMemoryStats::TrackResource(Texture.Get());
 	CreateViews(Device, InDesc);
 }
 

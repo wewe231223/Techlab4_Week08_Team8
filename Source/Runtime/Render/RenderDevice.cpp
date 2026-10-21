@@ -3,6 +3,7 @@
 
 #include "Buffer.h"
 #include "Texture2D.h"
+#include "Texture2DArray.h"
 #include "TextureCube.h"
 #include "PipelineState.h"
 #include "DDSTextureLoader11.h"
@@ -208,9 +209,13 @@ TUniquePtr<FTexture2D> FRenderDevice::CreateTexture2D(const D3D11_TEXTURE2D_DESC
 
 TUniquePtr<FTexture2D> FRenderDevice::CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const void* InitialData)
 {
-	TUniquePtr<FTexture2D> Texture = MakeUnique<FTexture2D>(Device.Get(), Desc, InitialData);
+	TUniquePtr<FTexture2D> Texture = MakeUnique<FTexture2D>(Device.Get(), Desc, InitialData, 0u);
 
 	return Texture;
+}
+
+TUniquePtr<FTexture2DArray> FRenderDevice::CreateTexture2DArray(const D3D11_TEXTURE2D_DESC& Desc, const D3D11_SUBRESOURCE_DATA* InitialData) {
+	return MakeUnique<FTexture2DArray>(Device.Get(), Desc, InitialData);
 }
 
 TUniquePtr<FTexture2D> FRenderDevice::LoadDDSTexture(const FString& Path) {
@@ -238,7 +243,7 @@ TUniquePtr<FTexture2D> FRenderDevice::LoadDDSTexture(const FString& Path) {
 	}
 
 	ComPtr<ID3D11Texture2D> Texture{};
-	if (FAILED(Resource.As(&Texture))) 
+	if (FAILED(Resource.As(&Texture)))
 	{
 		HTR_LOG(Error, "[Texture] DDS is not a 2D texture: {}", Path);
 		return nullptr;
@@ -246,14 +251,14 @@ TUniquePtr<FTexture2D> FRenderDevice::LoadDDSTexture(const FString& Path) {
 
 	D3D11_TEXTURE2D_DESC Desc{};
 	Texture->GetDesc(&Desc);
-	if (Desc.ArraySize != 1 || (Desc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) != 0) 
+	if (Desc.ArraySize != 1 || (Desc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) != 0)
 	{
 		HTR_LOG(Error, "[Texture] DDS arrays and cubemaps are not supported by UTexture2D: {}", Path);
 		return nullptr;
 	}
 
 	TUniquePtr<FTexture2D> LoadedTexture{ MakeUnique<FTexture2D>(Device.Get(), std::move(Resource), Desc) };
-	if (!LoadedTexture->GetSRV()) 
+	if (!LoadedTexture->GetSRV())
 	{
 		return nullptr;
 	}
@@ -304,7 +309,7 @@ TUniquePtr<FComputeShader> FRenderDevice::CreateComputeShader(const FShaderByteC
 	//		ErrorBlob->Release();
 	//	}
 	//	assert(false && "Vertex shader compile failed");
-	//	return nullptr; 
+	//	return nullptr;
 	//}
 
 	//hr = Device->CreateVertexShader(VertexShaderCSO->GetBufferPointer(), VertexShaderCSO->GetBufferSize(), nullptr, Shader->VertexShader.GetAddressOf());
@@ -417,6 +422,17 @@ void FRenderDevice::CreateStates()
 		Desc.RenderTarget[0].BlendEnable = FALSE;
 		Desc.RenderTarget[0].RenderTargetWriteMask = 0;
 		Device->CreateBlendState(&Desc, BlendStates[(uint8)EBlendState::NoColorWrite].GetAddressOf());
+
+		// 곱셈 블렌딩 (디버그 오버레이: Dest * Src)
+		Desc.RenderTarget[0].BlendEnable = TRUE;
+		Desc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
+		Desc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+		Desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+		Desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+		Desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+		Desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+		Desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+		Device->CreateBlendState(&Desc, BlendStates[(uint8)EBlendState::Multiply].GetAddressOf());
 	}
 
 	// ---------- Sampler ----------

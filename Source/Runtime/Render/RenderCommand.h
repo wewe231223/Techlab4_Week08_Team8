@@ -3,6 +3,7 @@
 #include "RenderDevice.h"
 
 class FBuffer;
+class FTexture;
 class UStaticMesh;
 class UTexture2D;
 class FShaderProgram;
@@ -41,6 +42,7 @@ public:
 
 	static TUniquePtr<FTexture2D> CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const void* InitialData = nullptr);
 	static TUniquePtr<FTexture2D> CreateTexture2D(const D3D11_TEXTURE2D_DESC& Desc, const FImageData& Image);
+	static TUniquePtr<FTexture2DArray> CreateTexture2DArray(const D3D11_TEXTURE2D_DESC& Desc, const D3D11_SUBRESOURCE_DATA* InitialData = nullptr);
 	static TUniquePtr<FTexture2D> LoadDDSTexture(const FString& Path);
 	static TUniquePtr<FTextureCube> CreateTextureCube(const D3D11_TEXTURE2D_DESC& Desc, const TArray<const void*>& InitialDatas);
 
@@ -74,7 +76,7 @@ public:
 	// 한 번의 Map으로 버퍼 전체를 채울 때 쓴다. 반환 포인터에는 순차적으로 쓰기만 해야 한다.
 	static void* MapWriteDiscard(FBuffer* InBuffer);
 	static void Unmap(FBuffer* InBuffer);
-	static void BindShaderResource(uint32 Slot, FTexture2D* Texture2D, EShaderBindFlagBits FlagBits);
+	static void BindShaderResource(uint32 Slot, FTexture* Texture2D, EShaderBindFlagBits FlagBits);
 	static void BindShaderResource(uint32 Slot, UTexture2D* Texture2D, EShaderBindFlagBits FlagBits);
 	static void BindShaderResource(uint32 Slot, FStructuredBuffer* StructuredBuffer, EShaderBindFlagBits FlagBits);
 	
@@ -82,11 +84,11 @@ public:
 	// 슬롯의 SRV를 비운다. 같은 텍스처를 다음 패스에서 RTV로 쓰기 전에 호출한다.
 	static void UnbindShaderResource(uint32 Slot, EShaderBindFlagBits FlagBits);
 	// 크기·포맷이 같은 두 텍스처의 내용을 통째로 복사한다.
-	static void CopyTexture(FTexture2D* Dst, FTexture2D* Src);
+	static void CopyTexture(FTexture* Dst, FTexture* Src);
 
 	static void BeginRenderPass(const FRenderingInfo& RenderingInfo);
 	static void EndRenderPass(const FRenderingInfo& RenderingInfo);
-	static void ClearDepthStencil(FTexture2D* DepthStencilTexture, float Depth = 1.0f, uint8 Stencil = 0);
+	static void ClearDepthStencil(FTexture* DepthStencilTexture, float Depth = 1.0f, uint8 Stencil = 0, uint32 ArraySlice = 0);
 
 	static void SetViewport(uint32 InX, uint32 InY, uint32 InWidth, uint32 InHeight);
 

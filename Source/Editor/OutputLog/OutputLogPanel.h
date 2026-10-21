@@ -4,6 +4,7 @@
 #include "Editor/EditorUI/EditorPanel.h"
 #include "Core/EngineLog.h"
 
+class FShadowAtlasPanel;
 
 
 struct FLogData
@@ -18,7 +19,8 @@ public:
 	bool Init() override;
 	void Tick(float DeltaTime)override;
 	void OnRender() override;
-	const char* GetPanelName() const override { return "Output Log"; }
+	const char* GetPanelName() const override;
+	void SetShadowAtlasPanel(FShadowAtlasPanel* ShadowAtlasPanel);
 
 	void ClearLog();
 
@@ -33,6 +35,7 @@ public:
 	int TextEditCallback(ImGuiInputTextCallbackData* data);
 
 private:
+	FShadowAtlasPanel* mShadowAtlasPanel{};
 	char                  InputBuf[256];
 	TArray<FLogData>       Items;
 	TArray<FString>		  Commands;

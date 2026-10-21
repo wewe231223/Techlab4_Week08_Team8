@@ -55,6 +55,7 @@ void FScene::RemovePrimitive(UPrimitiveComponent* Component)
 		if (Found != INDEX_NONE) RenderStateDirtyProxies.RemoveAtSwap(Found);
 	}
 
+	RemoveShadowCaster(Proxy);
 	Component->SceneProxy = nullptr;
 	delete Proxy;
 
@@ -63,6 +64,9 @@ void FScene::RemovePrimitive(UPrimitiveComponent* Component)
 
 void FScene::RemoveAllPrimitives()
 {
+	if (mShadowAtlas.IsCacheEnabled()) {
+		ResetShadowCasterTracking();
+	}
 	// 하나씩 RemovePrimitive하면 대기열 검색(Find)이 물체 수만큼 반복되므로 통째로 비운다.
 	for (FPrimitiveSceneProxy* Proxy : PrimitiveSceneProxies)
 	{
@@ -110,6 +114,7 @@ void FScene::AddLight(ULightComponent* Component)
 void FScene::RemoveLight(ULightComponent* Component)
 {
 	if (!Component) return;
+	mShadowAtlas.Free(Component);
 
 	FLightSceneProxy* Proxy = Component->SceneProxy;
 	if (!Proxy)
@@ -149,6 +154,15 @@ void FScene::RemoveAllLights()
 	LocalLightProxies.Reset();
 	LocalLightParameters.Reset();
 	SkyLights.Reset();
+	mShadowAtlas.Reset();
+}
+
+FShadowAtlas& FScene::GetShadowAtlas() {
+	return mShadowAtlas;
+}
+
+void FScene::RequestShadowAtlasReallocation(const ULightComponent* LightComponent) {
+	mShadowAtlas.RequestReallocation(LightComponent);
 }
 
 // 등록된 라이트를 셰이더용 상수로 모아 Renderer에 올린다. 컴포넌트 값을 매 프레임 직접 읽으므로 별도 갱신 경로가 필요 없다.
@@ -177,7 +191,7 @@ void FScene::UpdateLights(FRenderer* Renderer)
 		}
 		FLightRenderParameters Parameters{};
 		Proxy->GetLightShaderParameters(Parameters);
-		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowRenderer().GetShadowMapIndex(Proxy->GetLightComponent()) });
+		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowRenderer().GetShadowMapIndex(Proxy->GetLightComponent()), Renderer->GetShadowRenderer().GetShadowMapViewCount(Proxy->GetLightComponent()), Proxy->GetCascadeSplits(), Proxy->IsCSMEnabled() ? Proxy->GetCascadeTransitionFraction() : 0.0f });
 	}
 
 	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)
@@ -375,4 +389,37 @@ void FScene::MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy)
 	if (!Proxy || Proxy->bRenderStateQueued) return;
 	Proxy->bRenderStateQueued = true;
 	RenderStateDirtyProxies.Add(Proxy);
+}
+
+uint64 FScene::BeginShadowUpdate() {
+	return ++mShadowUpdateSerial;
+}
+
+void FScene::RemoveShadowCaster(const FPrimitiveSceneProxy* Caster) {
+	if (!mShadowAtlas.IsCacheEnabled()) {
+		return;
+	}
+
+	for (FLightSceneProxy* Proxy : DirectionalLightProxies) {
+		Proxy->RemoveShadowCaster(Caster, mShadowAtlas);
+	}
+	for (FLightSceneProxy* Proxy : LocalLightProxies) {
+		Proxy->RemoveShadowCaster(Caster, mShadowAtlas);
+	}
+}
+
+void FScene::ResetShadowCasterTracking() {
+	for (FPrimitiveSceneProxy* Proxy : PrimitiveSceneProxies) {
+		Proxy->ResetShadowTracking();
+	}
+	for (FLightSceneProxy* Proxy : DirectionalLightProxies) {
+		Proxy->ResetShadowMaps();
+		mShadowAtlas.InvalidateCacheEntry(Proxy->GetLightComponent(), 0);
+	}
+	for (FLightSceneProxy* Proxy : LocalLightProxies) {
+		Proxy->ResetShadowMaps();
+		for (uint32 FaceIndex{}; FaceIndex < PointShadowFaceCount; ++FaceIndex) {
+			mShadowAtlas.InvalidateCacheEntry(Proxy->GetLightComponent(), FaceIndex);
+		}
+	}
 }

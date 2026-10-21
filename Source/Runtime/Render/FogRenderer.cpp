@@ -27,7 +27,7 @@ bool FFogRenderer::Init(FRenderer* InRenderer)
 	return true;
 }
 
-void FFogRenderer::OnRender(FTexture2D* depthTexture, const FMatrix& ViewProjection, const FVector& CameraPosition, const FFogInfo& InFogInfo)
+void FFogRenderer::OnRender(FTexture* depthTexture, const FMatrix& ViewProjection, const FVector& CameraPosition, const FFogInfo& InFogInfo)
 {
 
 	//fogshader 바인드

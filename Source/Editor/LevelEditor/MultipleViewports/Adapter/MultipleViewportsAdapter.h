@@ -96,6 +96,10 @@ public:
     FVector GetEngineCameraForward(int32 ViewIndex) const;
     // Core Billboard 계산 결과를 엔진 월드 행렬로 변환한다.
     FMatrix BuildEngineBillboardMatrix(int32 ViewIndex, const FVector& WorldPosition, float Width, float Height) const;
+
+    float GetEngineCameraNearClip(int32 ViewIndex) const;
+    float GetEngineCameraFarClip(int32 ViewIndex) const;
+
     // 지정 View가 직교 투영인지 반환한다.
     bool IsOrthographic(int32 ViewIndex) const;
     // 활성 View의 로컬 마우스 좌표를 Core로 역투영해 엔진 Ray로 반환한다.

@@ -2,6 +2,7 @@
 #include "Texture2D.h"
 
 #include "RenderCommand.h"
+#include "GraphicsMemoryStats.h"
 
 
 FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const FImageData& Image)
@@ -11,10 +12,14 @@ FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc,
 
 FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc, const void* InitialData, uint32 RowPitch)
 {
+	if (!Device || InDesc.ArraySize != 1 || (InDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) != 0) {
+		return;
+	}
 	Width = InDesc.Width;
 	Height = InDesc.Height;
 	Depth = 1;
 	Format = InDesc.Format;
+	ArraySize = InDesc.ArraySize;
 	Dimension = ETextureDimension::Texture2D;
 
 	if (InitialData && RowPitch == 0)
@@ -32,6 +37,7 @@ FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc,
 	HRESULT hr = Device->CreateTexture2D(&InDesc, InitPtr, (ID3D11Texture2D**)Texture.GetAddressOf());
 	if (FAILED(hr)) { /* 기존 로그 그대로 */ return; }
 
+	FGraphicsMemoryStats::TrackResource(Texture.Get());
 	CreateViews(Device, InDesc);
 
 	if (bGenerateMips && InitialData && SRV)
@@ -44,12 +50,17 @@ FTexture2D::FTexture2D(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& InDesc,
 }
 FTexture2D::FTexture2D(ID3D11Device* Device, ComPtr<ID3D11Resource> SwapchainTexture, const D3D11_TEXTURE2D_DESC& InDesc)
 {
+	if (!Device || !SwapchainTexture || InDesc.ArraySize != 1 || (InDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) != 0) {
+		return;
+	}
 	Texture = std::move(SwapchainTexture);
+	FGraphicsMemoryStats::TrackResource(Texture.Get());
 
 	Width = InDesc.Width;
 	Height = InDesc.Height;
 	Depth = 1;
 	Format = InDesc.Format;
+	ArraySize = InDesc.ArraySize;
 	Dimension = ETextureDimension::Texture2D;
 
 	CreateViews(Device, InDesc);
@@ -88,7 +99,7 @@ void FTexture2D::CreateViews(ID3D11Device* Device, const D3D11_TEXTURE2D_DESC& I
 		DsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 		DsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 
-		hr = Device->CreateDepthStencilView(Texture.Get(), bTypelessDepth ? &DsvDesc : nullptr, DSV.GetAddressOf());
+		hr = Device->CreateDepthStencilView(Texture.Get(), bTypelessDepth ? &DsvDesc : nullptr, mDepthStencilView.GetAddressOf());
 		if (FAILED(hr))
 			HTR_LOG(Error, "[Texture2D] CreateDepthStencilView failed (hr=0x{:08X})", (uint32)hr);
 	}

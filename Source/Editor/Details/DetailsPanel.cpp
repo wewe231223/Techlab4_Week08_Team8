@@ -21,12 +21,14 @@
 #include "Render/Material.h"
 #include "Render/ShadowRenderer.h"
 #include "Render/Texture2D.h"
+#include "Render/Texture2DArray.h"
 #include "Text/Font.h"
 #include "UObject/UObjectIterator.h"
 #include "GameFramework/Actor.h"
 #include "Core/EngineLog.h"
 
 #include <algorithm>
+#include <cfloat>
 
 
 namespace
@@ -492,13 +494,13 @@ namespace
 					}
 
 					ImGui::TableNextRow();
-					
+
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Text("Shininess");
-					
+
 					ImGui::TableSetColumnIndex(1);
 					ImGui::SetNextItemWidth(-1.0f);
-					
+
 					float TempShininess =Effective ? Effective->Shininess : 32.0f;
 					if (ImGui::DragFloat("##Shininess", &TempShininess, 0.5f, 1.0f, 256.0f))
 					{
@@ -511,7 +513,7 @@ namespace
 					}
 
 					ImGui::TableNextRow();
-					
+
 					// 4: UV Scroll Speed
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Text("UV Scroll");
@@ -666,6 +668,15 @@ namespace
 		const FString Label = "##" + Property.Name;
 
 		const char* DisplayName = Property.Name.c_str();
+		if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
+			DisplayName = "Min Caster Depth";
+		} else if (Property.Name == "SourceAngle" && Cast<UDirectionalLightComponent>(Object)) {
+			DisplayName = "Source Angle (deg)";
+		} else if (Property.Name == "SourceRadius" && Cast<UPointLightComponent>(Object)) {
+			DisplayName = "Source Radius";
+		} else if (Property.Name == "ShadowSourceRadius" && Cast<URectLightComponent>(Object)) {
+			DisplayName = "Shadow Source Radius";
+		}
 
 		// 패널이 넓으면 라벨 | 값을 한 줄에, 좁거나 라벨이 길면 라벨 아래 줄에 값을 놓는다.
 		const float StartX = ImGui::GetCursorPosX();
@@ -687,7 +698,27 @@ namespace
 		switch (Property.Type)
 		{
 		case EPropertyType::Float:
-			bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.01f, 0.001f, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+			} else if (Property.Name == "SourceAngle" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.01f, 0.0f, MaxShadowSourceAngle, "%.4f", ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Angular diameter of the directional light source in degrees. 0 gives hard shadows.");
+				}
+			} else if (Property.Name == "SourceRadius" && Cast<UPointLightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.005f, 0.0f, MaxShadowSourceRadius, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Radius of the light source in world units. Controls PCSS softness, independently of attenuation radius.\n0 gives hard shadows.");
+				}
+			} else if (Property.Name == "ShadowSourceRadius" && Cast<URectLightComponent>(Object)) {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.005f, 0.0f, MaxShadowSourceRadius, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+			} else if (Property.Name == "SplitLambda" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 1.0f, "%.2f");
+			} else if (Property.Name == "CascadeTransitionFraction" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 0.3f, "%.2f");
+			} else {
+				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			}
 			break;
 		case EPropertyType::Int:
 			if (Property.Name == "mShadowMapResolution" && Cast<ULightComponent>(Object)) {
@@ -696,6 +727,8 @@ namespace
 				bChanged = DrawShadowDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
 			} else if (Property.Name == "mShadowSlopeScaledDepthBiasPreset" && Cast<ULightComponent>(Object)) {
 				bChanged = DrawShadowSlopeScaledDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
+			} else if (Property.Name == "CascadeCount" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderInt(Label.c_str(), static_cast<int*>(ValuePtr), 2, 4);
 			} else {
 				bChanged = ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
 			}
@@ -937,6 +970,11 @@ void FDetailsPanel::OnRender()
 {
 	ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
 
+	// 그림자 맵 미리보기는 DrawShadowMap이 그려질 때만 다시 요청한다. 라이트 선택이 풀리면 미리보기 패스도 멈춘다.
+	if (mShadowRenderer) {
+		mShadowRenderer->RequestShadowPreview(nullptr, 0);
+	}
+
 	ImGui::Begin("Details");
 
 	if (TargetActor)
@@ -952,7 +990,7 @@ void FDetailsPanel::OnRender()
 		UActorComponent* SelectCandidateComponent = TargetComponent;
 
 		DrawActorHeader(TargetActor, TargetComponent);
-		DrawCompoenetList(TargetActor, TargetComponent);				
+		DrawCompoenetList(TargetActor, TargetComponent);
 		ImGui::Separator();
 
 		// 액터 -> 컴포넌트 순으로, 클래스별 프로퍼티 표시
@@ -987,9 +1025,9 @@ void FDetailsPanel::OnRender()
 				}
 
 				PendingDeleteComponent = nullptr;
-			}			
-		}		
-	}	
+			}
+		}
+	}
 	ImGui::End();
 }
 
@@ -1003,32 +1041,52 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		return;
 	}
 
-	FTexture2D* Atlas{ mShadowRenderer ? mShadowRenderer->GetShadowDepthTexture() : nullptr };
+	FTexture2DArray* Atlas{ mShadowRenderer ? mShadowRenderer->GetShadowDepthTexture() : nullptr };
 	const uint32 ViewCount{ mShadowRenderer ? mShadowRenderer->GetShadowMapViewCount(LightComponent) : 0 };
 	if (!Atlas || !Atlas->GetSRV() || ViewCount == 0) {
 		ImGui::TextDisabled(LightComponent->CastsShadows() ? "Shadow map is not allocated in the last rendered view." : "Cast Shadows is disabled.");
 		return;
 	}
-	if (ViewCount == PointShadowFaceCount) {
+	ELightType LightType = LightComponent->GetLightType();
+	if (LightType == ELightType::Point && ViewCount == PointShadowFaceCount) {
 		const char* FaceNames[PointShadowFaceCount]{ "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
 		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, static_cast<int32>(PointShadowFaceCount) - 1);
 		ImGui::Combo("Shadow Face", &mShadowPreviewFace, FaceNames, static_cast<int32>(PointShadowFaceCount));
 	}
-	const uint32 FaceIndex{ ViewCount == PointShadowFaceCount ? static_cast<uint32>(mShadowPreviewFace) : 0 };
+	if (LightType == ELightType::Directional && ViewCount > 1)
+	{
+		const char* CascadeNames[]{ "Cascade 0 (Near)", "Cascade 1", "Cascade 2", "Cascade 3", "Cascade 4", "Cascade 5" };
+		const int32 MaxCascades = static_cast<int32>(ViewCount);
+		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, MaxCascades - 1);
+		ImGui::Combo("Shadow Face", &mShadowPreviewFace, CascadeNames, MaxCascades);
+	}
+	const uint32 FaceIndex = (ViewCount > 1) ? static_cast<uint32>(mShadowPreviewFace) : 0;
 	const FShadowMapRenderParameters* Parameters{ mShadowRenderer->GetShadowMapRenderParameters(LightComponent, FaceIndex) };
 	if (!Parameters) {
 		return;
 	}
 
+	// 아틀라스는 Texture2DArray라 ImGui가 직접 읽을 수 없다. 그림자 렌더러가 다음 프레임에 이 타일을 2D 미리보기 텍스처로 그린다.
+	mShadowRenderer->RequestShadowPreview(LightComponent, FaceIndex);
+
 	const FVector4& UvScaleBias{ Parameters->mUvScaleBias };
-	const ImVec2 UvMin{ UvScaleBias.Z + Parameters->mTexelSize.X * 0.5f, UvScaleBias.W + Parameters->mTexelSize.Y * 0.5f };
-	const ImVec2 UvMax{ UvScaleBias.Z + UvScaleBias.X - Parameters->mTexelSize.X * 0.5f, UvScaleBias.W + UvScaleBias.Y - Parameters->mTexelSize.Y * 0.5f };
 	const uint32 Width{ static_cast<uint32>(Atlas->GetWidth() * UvScaleBias.X + 0.5f) };
 	const uint32 Height{ static_cast<uint32>(Atlas->GetHeight() * UvScaleBias.Y + 0.5f) };
 	ImGui::TextDisabled("Last rendered view");
-	ImGui::Text("%u x %u", Width, Height);
+	// 아틀라스에 자리가 부족하면 할당기가 해상도를 낮춘다. 요청값과 다를 때만 함께 보여 준다.
+	const uint32 RequestedResolution{ static_cast<uint32>(NormalizeShadowMapResolution(LightComponent->GetShadowSettings().mResolution)) };
+	if (RequestedResolution != Width) {
+		ImGui::Text("%u x %u (page %u, requested %u)", Width, Height, Parameters->mArraySlice, RequestedResolution);
+	} else {
+		ImGui::Text("%u x %u (page %u)", Width, Height, Parameters->mArraySlice);
+	}
 	const float Size{ std::clamp(ImGui::GetContentRegionAvail().x, 1.0f, 384.0f) };
-	ImGui::Image(reinterpret_cast<ImTextureID>(Atlas->GetSRV()), ImVec2{ Size, Size }, UvMin, UvMax);
+	FTexture2D* Preview{ mShadowRenderer->GetShadowPreviewTexture() };
+	if (Preview && Preview->GetSRV()) {
+		ImGui::Image(reinterpret_cast<ImTextureID>(Preview->GetSRV()), ImVec2{ Size, Size });
+	} else {
+		ImGui::Dummy(ImVec2{ Size, Size });
+	}
 }
 
 void FDetailsPanel::SelectComponent(UActorComponent* Component)
@@ -1085,7 +1143,7 @@ void FDetailsPanel::DrawCompoenetList(AActor* SelectedActor, UActorComponent*& O
 		{
 			Flags |= ImGuiTreeNodeFlags_Selected;
 		}
-		
+
 		FString Label = ActorComp->GetName();
 		const ImVec2 RowStart = ImGui::GetCursorScreenPos();
 		const float RowWidth = ImGui::GetContentRegionAvail().x;
@@ -1106,7 +1164,7 @@ void FDetailsPanel::DrawCompoenetList(AActor* SelectedActor, UActorComponent*& O
 
 		const FString ClassName = std::format("({})", ActorComp->GetClass()->Name);
 		const float TextX = RowStart.x + RowWidth - ImGui::CalcTextSize(ClassName.c_str()).x;
-		ImGui::GetWindowDrawList()->AddText(ImVec2(TextX, RowStart.y), IM_COL32(200, 200, 200, 255), ClassName.c_str());		
+		ImGui::GetWindowDrawList()->AddText(ImVec2(TextX, RowStart.y), IM_COL32(200, 200, 200, 255), ClassName.c_str());
 
 		ImGui::PopID();
 	}
@@ -1241,7 +1299,7 @@ void FDetailsPanel::DrawSceneComponentNode(USceneComponent* Component, USceneCom
 
 void FDetailsPanel::TryReparent(USceneComponent* DroppedComponent, USceneComponent* DragComponent)
 {
-	if (DroppedComponent != nullptr 
+	if (DroppedComponent != nullptr
 		&& DroppedComponent->GetAttachParent() != DragComponent
 		&& DroppedComponent != DragComponent)
 	{
