@@ -15,7 +15,7 @@ bool FShadowAtlasPanel::Init() {
 
 void FShadowAtlasPanel::Tick(float DeltaTime) {
 	if (mShadowRenderer) {
-		mShadowRenderer->RequestShadowAtlasPreview(IsOpen() ? mPageIndex : -1);
+		mShadowRenderer->RequestShadowAtlasPreview(IsOpen() ? mPageIndex : -1, mLinearDepth);
 	}
 }
 
@@ -46,13 +46,18 @@ void FShadowAtlasPanel::OnRender() {
 	}
 
 	mPageIndex = std::clamp(mPageIndex, 0, static_cast<int32>(Atlas->GetArraySize()) - 1);
+	int32 DisplayMode{ mLinearDepth ? 1 : 0 };
+	const char* DisplayModes[]{ "Raw", "Linear" };
+	ImGui::Combo("Depth Display", &DisplayMode, DisplayModes, 2);
+	mLinearDepth = DisplayMode == 1;
+	ImGui::TextDisabled(mLinearDepth ? "Linear: normalized light-view distance per tile" : "Raw: stored depth (red channel)");
 	ImGui::TextDisabled("Last rendered view | Yellow: atlas and shadow map tile boundaries");
 	if (ImGui::BeginTabBar("ShadowAtlasPages")) {
 		for (uint32 PageIndex{}; PageIndex < Atlas->GetArraySize(); ++PageIndex) {
 			const FString Label{ std::format("Page {}", PageIndex) };
 			if (ImGui::BeginTabItem(Label.c_str())) {
 				mPageIndex = static_cast<int32>(PageIndex);
-				mShadowRenderer->RequestShadowAtlasPreview(mPageIndex);
+				mShadowRenderer->RequestShadowAtlasPreview(mPageIndex, mLinearDepth);
 				DrawAtlasPage(PageIndex, *Atlas);
 				ImGui::EndTabItem();
 			}

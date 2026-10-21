@@ -42,6 +42,7 @@ public:
 	FShadowRenderer& operator=(const FShadowRenderer&) = delete;
 
 public:
+	bool Init();
 	bool Render(FScene& Scene, const FShadowCameraContext& CameraContext, int32 AtlasResolution = mDefaultAtlasResolution);
 	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = mDefaultAtlasResolution);
 	void Reset();
@@ -60,9 +61,9 @@ public:
 	int32 GetShadowMapIndex(const ULightComponent* LightComponent) const;
 	uint32 GetShadowMapViewCount(const ULightComponent* LightComponent) const;
 	// 에디터 미리보기. 요청한 다음 그림자 렌더부터 해당 타일을 2D 텍스처로 그린다. nullptr로 요청하면 멈춘다.
-	void RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex);
+	void RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex, bool LinearDepth = false);
 	FTexture2D* GetShadowPreviewTexture() const;
-	void RequestShadowAtlasPreview(int32 PageIndex);
+	void RequestShadowAtlasPreview(int32 PageIndex, bool LinearDepth = false);
 	FTexture2D* GetShadowAtlasPreviewTexture(uint32 PageIndex) const;
 
 private:
@@ -72,7 +73,6 @@ private:
 	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(FShadowAtlas& Atlas, const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution);
 	static bool GatherShadowCasterBounds(const FScene& Scene, FBox& OutBounds);
 	bool InitializeShadowPass();
-	bool InitializeComparisonSampler();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);
 	void ConfigureShadowCache(FScene& Scene, const TArray<FShadowMapRequest>& Requests);
@@ -86,7 +86,7 @@ private:
 	void ClearShadowTile(const FShadowAtlasTile& Tile);
 	FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const;
 	bool InitializePreviewPass(TUniquePtr<FTexture2D>& Texture, uint32 Resolution);
-	bool RenderPreviewTexture(FTexture2D& Texture, const FVector2& UvMin, const FVector2& UvMax, uint32 PageIndex);
+	bool RenderPreviewTexture(FTexture2D& Texture, const FVector2& UvMin, const FVector2& UvMax, uint32 PageIndex, bool LinearDepth, const FShadowMapRenderParameters* Parameters = nullptr);
 	void RenderShadowPreview();
 	void RenderShadowAtlasPreview();
 
@@ -110,10 +110,12 @@ private:
 	FShaderProgram* mPreviewShader{};
 	const ULightComponent* mPreviewLight{}; // 키로만 쓰고 역참조하지 않는다
 	uint32 mPreviewFace{};
+	bool mPreviewLinearDepth{};
 	bool mPreviewReady{};
 	TUniquePtr<FTexture2D> mAtlasPreviewTexture{};
 	int32 mAtlasPreviewPage{ -1 };
 	uint32 mRenderedAtlasPreviewPage{};
+	bool mAtlasPreviewLinearDepth{};
 	bool mAtlasPreviewReady{};
 
 	TUniquePtr<FStructuredBuffer> mShadowMapBuffer{};

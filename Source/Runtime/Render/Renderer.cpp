@@ -77,8 +77,12 @@ void WritePerObjectConstants(uint8* Dest, const FMatrix& World, const FMatrix& W
 	std::memcpy(Dest, &Constants, sizeof(Constants));
 }
 
-bool FRenderer::Init()
-{
+bool FRenderer::Init() {
+	if (!mShadowRenderer.Init()) {
+		HTR_LOG(Error, "Failed to initialize shadow comparison sampler.");
+		return false;
+	}
+
 	bUsePerObjectSlots = RenderCommand::SupportsConstantBufferOffsets();
 	PerObjectCB = RenderCommand::CreateConstantBuffer(sizeof(FPerObjectConstants));
 	ViewCB = RenderCommand::CreateConstantBuffer(sizeof(FViewConstants));

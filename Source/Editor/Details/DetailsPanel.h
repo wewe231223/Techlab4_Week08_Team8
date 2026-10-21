@@ -49,6 +49,7 @@ private:
 private:
 	FShadowRenderer* mShadowRenderer{};
 	int32 mShadowPreviewFace{};
+	bool mShadowPreviewLinearDepth{};
 	UWorld* World = nullptr;
 	ImFont* CustomFont = nullptr;
 

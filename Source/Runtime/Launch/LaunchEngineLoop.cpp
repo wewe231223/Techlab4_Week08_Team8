@@ -71,7 +71,10 @@ bool FEngineLoop::PreInit(HINSTANCE hInstance, UClass* EngineClass)
 	RenderCommand::Init(RenderDevice.get());
 
 	Renderer = MakeUnique<FRenderer>();
-	Renderer->Init();
+	if (!Renderer->Init()) {
+		FSplashScreen::Hide();
+		return false;
+	}
 
 	MainWindow = MakeUnique<FWindow>();
 	if (!MainWindow->Create(hInstance, Width, Height, Config.Title, Config.bBorderless))

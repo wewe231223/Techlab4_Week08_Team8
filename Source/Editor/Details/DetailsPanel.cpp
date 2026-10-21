@@ -1047,27 +1047,31 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		ImGui::TextDisabled(LightComponent->CastsShadows() ? "Shadow map is not allocated in the last rendered view." : "Cast Shadows is disabled.");
 		return;
 	}
-	ELightType LightType = LightComponent->GetLightType();
+	const ELightType LightType{ LightComponent->GetLightType() };
 	if (LightType == ELightType::Point && ViewCount == PointShadowFaceCount) {
 		const char* FaceNames[PointShadowFaceCount]{ "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
 		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, static_cast<int32>(PointShadowFaceCount) - 1);
 		ImGui::Combo("Shadow Face", &mShadowPreviewFace, FaceNames, static_cast<int32>(PointShadowFaceCount));
 	}
-	if (LightType == ELightType::Directional && ViewCount > 1)
-	{
+	if (LightType == ELightType::Directional && ViewCount > 1) {
 		const char* CascadeNames[]{ "Cascade 0 (Near)", "Cascade 1", "Cascade 2", "Cascade 3", "Cascade 4", "Cascade 5" };
-		const int32 MaxCascades = static_cast<int32>(ViewCount);
+		const int32 MaxCascades{ static_cast<int32>(ViewCount) };
 		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, MaxCascades - 1);
 		ImGui::Combo("Shadow Face", &mShadowPreviewFace, CascadeNames, MaxCascades);
 	}
-	const uint32 FaceIndex = (ViewCount > 1) ? static_cast<uint32>(mShadowPreviewFace) : 0;
+	const uint32 FaceIndex{ ViewCount > 1 ? static_cast<uint32>(mShadowPreviewFace) : 0 };
 	const FShadowMapRenderParameters* Parameters{ mShadowRenderer->GetShadowMapRenderParameters(LightComponent, FaceIndex) };
 	if (!Parameters) {
 		return;
 	}
 
 	// 아틀라스는 Texture2DArray라 ImGui가 직접 읽을 수 없다. 그림자 렌더러가 다음 프레임에 이 타일을 2D 미리보기 텍스처로 그린다.
-	mShadowRenderer->RequestShadowPreview(LightComponent, FaceIndex);
+	int32 DisplayMode{ mShadowPreviewLinearDepth ? 1 : 0 };
+	const char* DisplayModes[]{ "Raw", "Linear" };
+	ImGui::Combo("Depth Display", &DisplayMode, DisplayModes, 2);
+	mShadowPreviewLinearDepth = DisplayMode == 1;
+	mShadowRenderer->RequestShadowPreview(LightComponent, FaceIndex, mShadowPreviewLinearDepth);
+	ImGui::TextDisabled(mShadowPreviewLinearDepth ? "Linear: normalized light-view distance" : "Raw: stored depth (red channel)");
 
 	const FVector4& UvScaleBias{ Parameters->mUvScaleBias };
 	const uint32 Width{ static_cast<uint32>(Atlas->GetWidth() * UvScaleBias.X + 0.5f) };

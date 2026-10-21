@@ -21,5 +21,6 @@ private:
 private:
 	FShadowRenderer* mShadowRenderer{};
 	int32 mPageIndex{};
+	bool mLinearDepth{};
 	bool mFocusRequested{};
 };
