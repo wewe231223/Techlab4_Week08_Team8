@@ -42,7 +42,7 @@ public:
 	FShadowRenderer& operator=(const FShadowRenderer&) = delete;
 
 public:
-	bool Render(FScene& Scene, int32 AtlasResolution = mDefaultAtlasResolution);
+	bool Render(FScene& Scene, const FShadowCameraContext& CameraContext, int32 AtlasResolution = mDefaultAtlasResolution);
 	bool RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRequest>& Requests, int32 AtlasResolution = mDefaultAtlasResolution);
 	void Reset();
 	void BindShadowMaps();
@@ -128,4 +128,5 @@ private:
 	bool mShadowCacheEnabled{ true };
 	// 값이 바뀌면 수집되는 Caster 목록이 달라져 캐시 조건이 다시 그리게 한다.
 	float mMinShadowCasterTexelRadius{ 1.0f };
+	FShadowCameraContext mCurrentCameraContext{};
 };

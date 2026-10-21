@@ -191,7 +191,7 @@ void FScene::UpdateLights(FRenderer* Renderer)
 		}
 		FLightRenderParameters Parameters{};
 		Proxy->GetLightShaderParameters(Parameters);
-		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowRenderer().GetShadowMapIndex(Proxy->GetLightComponent()) });
+		DirectionalLights.Add(FDirectionalLightInfo{ Parameters.Direction, Parameters.Intensity, Parameters.Color, Renderer->GetShadowRenderer().GetShadowMapIndex(Proxy->GetLightComponent()), Renderer->GetShadowRenderer().GetShadowMapViewCount(Proxy->GetLightComponent()), Proxy->GetCascadeSplits(), Proxy->IsCSMEnabled() ? Proxy->GetCascadeTransitionFraction() : 0.0f });
 	}
 
 	for (FLocalLightSceneProxy* Proxy : LocalLightProxies)

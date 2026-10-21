@@ -93,6 +93,10 @@ struct FDirectionalLightInfo
     float Intensity;
     float3 Color;
     int mShadowIndex; // 방향광의 그림자 데이터 항목 인덱스. -1은 그림자 맵 미할당이다.
+    uint mCascadeCount;
+    float4 mCascadeSplits;
+    float mCascadeTransitionFraction;
+    float2 mPadding;
 };
 
 // SceneManagement.h의 FLightRenderParameters와 바이트 단위로 같아야 한다.
@@ -151,7 +155,7 @@ cbuffer Lighting : register(b4)
     uint NumLocalLights;
     uint NumShadowMaps;
     uint NumDirectionalLights;
-    uint LightingPadding;
+    uint mDebugCSM;
 };
 
 
@@ -506,7 +510,40 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
     const float3 Radiance = { Light.Color * Light.Intensity };
     FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
-    const float Visibility = { CastShadow(Light.mShadowIndex, WorldPos, N, DiskRotation) };
+    int ShadowIndex = { Light.mShadowIndex };
+    const float TransitionFraction = { Light.mCascadeTransitionFraction };
+    float NearSplit = { 0.0f };
+    float FarSplit = { 0.0f };
+    int CascadeIndex = { -1 };
+    const float3 ViewForward = { normalize(float3(ViewProjection[0][2], ViewProjection[1][2], ViewProjection[2][2])) };
+    const float ViewDepth = { dot(WorldPos - CameraWorldPos, ViewForward) };
+    if (Light.mCascadeCount > 1 && Light.mShadowIndex >= 0) {
+        ShadowIndex = -1;
+        for (uint Index = { 0 }; Index < min(Light.mCascadeCount, 4u); ++Index) {
+            if (ViewDepth < Light.mCascadeSplits[Index]) {
+                CascadeIndex = (int) Index;
+                ShadowIndex = Light.mShadowIndex + (int) Index;
+                FarSplit = Light.mCascadeSplits[Index];
+                break;
+            }
+            NearSplit = Light.mCascadeSplits[Index];
+        }
+    }
+    float Visibility = { CastShadow(ShadowIndex, WorldPos, N, DiskRotation) };
+
+    if (CascadeIndex >= 0 && CascadeIndex < (int) min(Light.mCascadeCount, 4u) - 1 && TransitionFraction > 0.0f) {
+        const float CascadeRange = { FarSplit - NearSplit };
+        const float DistToSplit = { FarSplit - ViewDepth };
+        const float BlendRange = { CascadeRange * TransitionFraction };
+
+        if (DistToSplit < BlendRange && BlendRange > 0.0f) {
+            const float BlendRatio = { saturate(1.0f - DistToSplit / BlendRange) };
+            const float NextVisibility = { CastShadow(ShadowIndex + 1, WorldPos, N, DiskRotation) };
+            Visibility = lerp(Visibility, NextVisibility, BlendRatio);
+        }
+    }
+
+
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;
 #endif
@@ -761,6 +798,7 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
     DiffuseLighting += Input.VertexDiffuse;
 #endif
 
-    return float4(Albedo.rgb * DiffuseLighting + SpecularLighting, Alpha);
+    float3 FinalColor = Albedo.rgb * DiffuseLighting + SpecularLighting;
+    return float4(FinalColor, Alpha);
 #endif
 }

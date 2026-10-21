@@ -1,8 +1,20 @@
-﻿#pragma once
+#pragma once
 
 #include "Types.h"
 #include "EngineString.h"
+#include "Math/Vector.h"
 
+struct FCascadeDebugInfo {
+	float mNear{};
+	float mFar{};
+	FVector mSphereCenter{};
+	float mSphereRadius{};
+};
+struct FCSMDebugSnapshot {
+	bool mEnabled{};
+	uint32 mCascadeCount{};
+	FCascadeDebugInfo mCascades[4]{};
+};
 // Overlay로 표시할 Stat 항목. 여러 항목을 동시에 켤 수 있어 비트 플래그로 둔다.
 enum class EStatFlags : uint32 {
 	None      = 0,
@@ -10,6 +22,7 @@ enum class EStatFlags : uint32 {
 	Memory    = 1 << 1,
 	Profile   = 1 << 2,
 	GPUMemory = 1 << 3,
+	CSM       = 1 << 4,
 };
 DEFINE_ENUM_OPERATORS(EStatFlags)
 
@@ -44,6 +57,8 @@ public:
 	static uint64 GetGPULocalBudgetBytes();
 	static uint64 GetGPUNonLocalUsageBytes();
 	static uint64 GetGPUNonLocalBudgetBytes();
+	static void UpdateCSMStats(const FCSMDebugSnapshot& Snapshot);
+	static const FCSMDebugSnapshot& GetCSMStats();
 
 private:
 	static void UpdateGPUMemoryStats();
@@ -63,4 +78,5 @@ private:
 	inline static uint64 mGPULocalBudgetBytes{};
 	inline static uint64 mGPUNonLocalUsageBytes{};
 	inline static uint64 mGPUNonLocalBudgetBytes{};
+	inline static FCSMDebugSnapshot mCSMStats{};
 };

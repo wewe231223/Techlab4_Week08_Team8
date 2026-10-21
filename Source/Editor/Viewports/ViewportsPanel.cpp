@@ -1,4 +1,4 @@
-﻿#include "EnginePCH.h"
+#include "EnginePCH.h"
 #include "Editor/Viewports/ViewportsPanel.h"
 #include "Editor/LevelEditor/MultipleViewports/Adapter/MultipleViewportsAdapter.h"
 
@@ -446,6 +446,22 @@ void FViewportsPanel::DrawStatOverlay(ImDrawList* DrawList, const ImVec2& ViewMi
 		}
 	}
 
+	if (FStatOverlay::IsEnabled(EStatFlags::CSM)) {
+		const FCSMDebugSnapshot& CSMStats{ FStatOverlay::GetCSMStats() };
+		Lines.Add({"CSM", TitleColor});
+		Lines.Add({std::format("  Status: {}", CSMStats.mEnabled ? "Enabled" : "Disabled"), ValueColor});
+		if (CSMStats.mEnabled) {
+			Lines.Add({std::format("  Cascades: {}", CSMStats.mCascadeCount), ValueColor});
+			for (uint32 Index{}; Index < CSMStats.mCascadeCount && Index < 4; ++Index) {
+				const FCascadeDebugInfo& Cascade{ CSMStats.mCascades[Index] };
+				Lines.Add({std::format("  Cascade {}", Index), TitleColor});
+				Lines.Add({std::format("    Near~Far: {:.2f} ~ {:.2f}", Cascade.mNear, Cascade.mFar), ValueColor});
+				Lines.Add({std::format("    Center:   ({:.2f}, {:.2f}, {:.2f})", Cascade.mSphereCenter.X, Cascade.mSphereCenter.Y, Cascade.mSphereCenter.Z), ValueColor});
+				Lines.Add({std::format("    Radius:   {:.2f}", Cascade.mSphereRadius), ValueColor});
+			}
+		}
+	}
+
 	struct FProfileStatLine
 	{
 		FString Text;
@@ -573,7 +589,7 @@ void FViewportsPanel::ResizeSlot(FViewSlot& Slot, const uint32 Width, const uint
 	Slot.DepthTarget = RenderCommand::CreateTexture2D(Desc);
 
 	// HDR Target
-	Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;	
+	Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	Desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	Slot.HDRTarget = RenderCommand::CreateTexture2D(Desc);
 

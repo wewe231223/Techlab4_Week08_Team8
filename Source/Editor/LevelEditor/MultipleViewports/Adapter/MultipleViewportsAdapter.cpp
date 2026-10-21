@@ -578,12 +578,25 @@ FMatrix FMultipleViewportsAdapter::GetEngineViewProjection(const int32 ViewIndex
 	return PrepareView(ViewIndex).EngineViewProjection;
 }
 
+float FMultipleViewportsAdapter::GetEngineCameraNearClip(int32 ViewIndex) const
+{
+	assert(IsViewActive(ViewIndex));
+	return GetEffectiveCamera(ViewIndex).Projection.NearClip;
+}
+
+float FMultipleViewportsAdapter::GetEngineCameraFarClip(int32 ViewIndex) const
+{
+	assert(IsViewActive(ViewIndex));
+	return GetEffectiveCamera(ViewIndex).Projection.FarClip;
+}
+
 // Native 카메라 위치를 엔진 FVector 그대로 반환한다.
 FVector FMultipleViewportsAdapter::GetEngineCameraLocation(const int32 ViewIndex) const
 {
 	assert(ViewIndex >= 0 && ViewIndex < MaxViewCount);
 	return GetEffectiveCamera(ViewIndex).Transform.Location;
 }
+
 
 // Native 회전에서 정규화한 Forward를 엔진 FVector로 반환한다.
 FVector FMultipleViewportsAdapter::GetEngineCameraForward(const int32 ViewIndex) const
@@ -662,7 +675,7 @@ void FMultipleViewportsAdapter::BuildRenderQueue(const int32 ViewIndex, FRenderQ
     OutQueue.Reset();
     OutIconQueue.Reset();
     OutArrowQueue.Reset();
-    
+
     PendingStaticMeshes.Reset();
     LODInputs.Reset();
     if (!IsViewActive(ViewIndex)) return;
@@ -743,7 +756,7 @@ void FMultipleViewportsAdapter::BuildRenderQueue(const int32 ViewIndex, FRenderQ
             UStaticMesh* Mesh = StaticComponent->GetStaticMesh();
             if (!Mesh)
                 continue;
-            
+
             // 빛 방향 Arrow 이면 ArrowQueue로 빼기
             if (StaticComponent->IsEditorIcon())
             {

@@ -1,4 +1,4 @@
-﻿#include "EnginePCH.h"
+#include "EnginePCH.h"
 #include "StatOverlay.h"
 
 #include "EngineStatics.h"
@@ -69,7 +69,7 @@ bool FStatOverlay::ExecCommand(const FString& CommandLine, FString& OutMessage) 
 		return false;
 
 	if (Tokens.Num() < 2) {
-		OutMessage = "Usage: stat <fps|memory|gpu|profile|all|none> | stat gpu dump";
+		OutMessage = "Usage: stat <fps|memory|gpu|profile|csm|all|none> | stat gpu dump";
 		return true;
 	}
 
@@ -87,7 +87,7 @@ bool FStatOverlay::ExecCommand(const FString& CommandLine, FString& OutMessage) 
 	}
 
 	if (EqualsIgnoreCase(Arg, "all")) {
-		mFlags = EStatFlags::FPS | EStatFlags::Memory | EStatFlags::Profile | EStatFlags::GPUMemory;
+		mFlags = EStatFlags::FPS | EStatFlags::Memory | EStatFlags::Profile | EStatFlags::GPUMemory | EStatFlags::CSM;
 		OutMessage = "stat all: all overlays enabled";
 		return true;
 	}
@@ -101,9 +101,11 @@ bool FStatOverlay::ExecCommand(const FString& CommandLine, FString& OutMessage) 
 		Target = EStatFlags::GPUMemory;
 	else if (EqualsIgnoreCase(Arg, "profile"))
 		Target = EStatFlags::Profile;
+	else if (EqualsIgnoreCase(Arg, "csm"))
+		Target = EStatFlags::CSM;
 
 	if (Target == EStatFlags::None) {
-		OutMessage = std::format("stat: unknown stat '{}'. Available: fps, memory, gpu, profile, all, none", Arg);
+		OutMessage = std::format("stat: unknown stat '{}'. Available: fps, memory, gpu, profile, csm, all, none", Arg);
 		return true;
 	}
 
@@ -177,6 +179,14 @@ uint64 FStatOverlay::GetGPUNonLocalUsageBytes() {
 
 uint64 FStatOverlay::GetGPUNonLocalBudgetBytes() {
 	return mGPUNonLocalBudgetBytes;
+}
+
+void FStatOverlay::UpdateCSMStats(const FCSMDebugSnapshot& Snapshot) {
+	mCSMStats = Snapshot;
+}
+
+const FCSMDebugSnapshot& FStatOverlay::GetCSMStats() {
+	return mCSMStats;
 }
 
 void FStatOverlay::UpdateGPUMemoryStats() {

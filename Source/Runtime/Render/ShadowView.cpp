@@ -113,6 +113,87 @@ bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& Ca
 	return FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView);
 }
 
+bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const FBox& CasterBounds, const FCascadeSliceBounds& SliceBounds, int32 Resolution, FShadowView& OutView, FVector* OutSphereCenter, float* OutSphereRadius) {
+	FVector Forward{};
+	FVector Right{};
+	FVector Up{};
+	if (!BuildShadowBasis(LightTransform, Forward, Right, Up)) {
+		return false;
+	}
+
+	const FVector CenterNear{ (SliceBounds.mCascadeSliceNear[0] + SliceBounds.mCascadeSliceNear[1] + SliceBounds.mCascadeSliceNear[2] + SliceBounds.mCascadeSliceNear[3]) * 0.25f };
+	const FVector CenterFar{ (SliceBounds.mCascadeSliceFar[0] + SliceBounds.mCascadeSliceFar[1] + SliceBounds.mCascadeSliceFar[2] + SliceBounds.mCascadeSliceFar[3]) * 0.25f };
+	const float NearFarDistanceSquared{ (CenterFar - CenterNear).SizeSquared() };
+	const float RadiusFarSquared{ ((SliceBounds.mCascadeSliceFar[0] - SliceBounds.mCascadeSliceFar[2]) * 0.5f).SizeSquared() };
+	const float RadiusNearSquared{ ((SliceBounds.mCascadeSliceNear[0] - SliceBounds.mCascadeSliceNear[2]) * 0.5f).SizeSquared() };
+	const float CenterOffsetRatio{ NearFarDistanceSquared > 1.0e-8f ? std::clamp(0.5f + (RadiusFarSquared - RadiusNearSquared) / (2.0f * NearFarDistanceSquared), 0.0f, 1.0f) : 0.5f };
+	FVector BoundingSphereCenter{ CenterNear + (CenterFar - CenterNear) * CenterOffsetRatio };
+	float BoundingSphereRadiusSquared{};
+	for (uint32 Index{}; Index < 4; ++Index) {
+		BoundingSphereRadiusSquared = std::max(BoundingSphereRadiusSquared, (SliceBounds.mCascadeSliceFar[Index] - BoundingSphereCenter).SizeSquared());
+		BoundingSphereRadiusSquared = std::max(BoundingSphereRadiusSquared, (SliceBounds.mCascadeSliceNear[Index] - BoundingSphereCenter).SizeSquared());
+	}
+
+	const float BoundingSphereRadius{ std::sqrt(BoundingSphereRadiusSquared) };
+	if (!std::isfinite(BoundingSphereRadius) || BoundingSphereRadius <= 1.0e-6f) {
+		return false;
+	}
+
+	const float TileResolution{ static_cast<float>(NormalizeShadowMapResolution(Resolution)) };
+	const float BorderScale{ 1.0f + 2.0f / TileResolution };
+	const float Width{ 2.0f * BoundingSphereRadius * BorderScale };
+	const float Height{ Width };
+	constexpr float DepthPadding{ 0.01f };
+	const FVector CasterBoxCenter{ CasterBounds.Min * 0.5f + CasterBounds.Max * 0.5f };
+	const FVector CasterBoxExtent{ CasterBounds.Max * 0.5f - CasterBounds.Min * 0.5f };
+	const float CasterHalfDepth{ FVector::Dot(CasterBoxExtent, Forward.GetAbs()) };
+	const float CasterCenterDepth{ FVector::Dot(CasterBoxCenter, Forward) };
+	const float CasterMinZ{ CasterCenterDepth - CasterHalfDepth };
+	const float SphereCenterZ{ FVector::Dot(BoundingSphereCenter, Forward) };
+	const float BackOffDistance{ std::max(BoundingSphereRadius, SphereCenterZ - CasterMinZ) + DepthPadding };
+	const float WorldSizePerTexel{ Width / TileResolution };
+	const float CenterX{ FVector::Dot(BoundingSphereCenter, Right) };
+	const float CenterY{ FVector::Dot(BoundingSphereCenter, Up) };
+	const float SnappedX{ std::round(CenterX / WorldSizePerTexel) * WorldSizePerTexel };
+	const float SnappedY{ std::round(CenterY / WorldSizePerTexel) * WorldSizePerTexel };
+	BoundingSphereCenter += Right * (SnappedX - CenterX) + Up * (SnappedY - CenterY);
+	const FVector Position{ BoundingSphereCenter - Forward * BackOffDistance };
+	constexpr float NearPlane{ 0.01f };
+	const float FarPlane{ NearPlane + BackOffDistance + BoundingSphereRadius + DepthPadding };
+	const FMatrix View{ BuildShadowViewMatrix(Position, Forward, Right, Up) };
+	if (!std::isfinite(FarPlane) || !IsFiniteShadowVector(Position) || !IsFiniteShadowMatrix(View)) {
+		return false;
+	}
+
+	const float WidthScale{ 2.0f / Width };
+	const float HeightScale{ 2.0f / Height };
+	const float DepthScale{ 1.0f / (FarPlane - NearPlane) };
+	if (!std::isfinite(WidthScale) || !std::isfinite(HeightScale) || std::min({ WidthScale, HeightScale, DepthScale }) <= 1.0e-6f) {
+		return false;
+	}
+
+	const FMatrix Projection{
+		0.0f, 0.0f, DepthScale, 0.0f,
+		WidthScale, 0.0f, 0.0f, 0.0f,
+		0.0f, HeightScale, 0.0f, 0.0f,
+		0.0f, 0.0f, -NearPlane * DepthScale, 1.0f
+	};
+	FShadowView Result{};
+	Result.mProjection = Projection;
+	Result.mView = View;
+	if (!FinalizeShadowView(Result, Position, NearPlane, FarPlane, OutView)) {
+		return false;
+	}
+
+	if (OutSphereCenter) {
+		*OutSphereCenter = BoundingSphereCenter;
+	}
+	if (OutSphereRadius) {
+		*OutSphereRadius = BoundingSphereRadius;
+	}
+	return true;
+}
+
 bool BuildSpotShadowView(const FTransform& LightTransform, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView) {
 	const FVector& LightPosition{ LightTransform.Location };
 	if (!IsFiniteShadowVector(LightPosition) || !std::isfinite(OuterConeAngle) || OuterConeAngle <= 0.0f || !std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {

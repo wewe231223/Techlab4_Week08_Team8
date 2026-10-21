@@ -44,7 +44,20 @@ struct FShadowMapRequest {
 	FLightSceneProxy* mLightProxy{};
 };
 
+struct FShadowCameraContext {
+	float mNearZ{};
+	float mFarZ{};
+	FVector mCameraPosition{};
+	FMatrix mViewProjection{ FMatrix::Identity };
+};
+
+struct FCascadeSliceBounds {
+	FVector mCascadeSliceNear[4]{};
+	FVector mCascadeSliceFar[4]{};
+};
+
 bool BuildDirectionalShadowView(const FTransform& LightTransform, const FBox& CasterBounds, int32 Resolution, FShadowView& OutView);
+bool BuildDirectionalCascadeShadowView(const FTransform& LightTransform, const FBox& CasterBounds, const FCascadeSliceBounds& SliceBounds, int32 Resolution, FShadowView& OutView, FVector* OutSphereCenter = nullptr, float* OutSphereRadius = nullptr);
 bool BuildSpotShadowView(const FTransform& LightTransform, float OuterConeAngle, float AttenuationRadius, FShadowView& OutView);
 bool BuildRectShadowView(const FTransform& LightTransform, float HalfWidth, float HalfHeight, float AttenuationRadius, FShadowView& OutView);
 bool BuildPointShadowViews(const FTransform& LightTransform, float AttenuationRadius, FShadowView (&OutViews)[PointShadowFaceCount]);

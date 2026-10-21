@@ -20,6 +20,7 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Actor/LightActorBase.h"
+#include "Engine/DirectionalLightSceneProxy.h"
 
 #include "Asset/AssetManager.h"
 #include "Render/RenderResourceManager.h"
@@ -113,6 +114,9 @@ bool UEditorEngine::Init()
 	DepthViewRenderer = MakeUnique<FDepthViewRenderer>();
 	DepthViewRenderer->Init();
 
+	mCSMDebugRenderer = MakeUnique<FCSMDebugRenderer>();
+	mCSMDebugRenderer->Init();
+
 	ToneMapRenderer = MakeUnique<FToneMapRenderer>();
 	ToneMapRenderer->Init();
 
@@ -141,7 +145,7 @@ bool UEditorEngine::Init()
 	TextRenderer = MakeUnique<FTextRenderer>();
 	TextRenderer->Init();
 
-	// 투영 행렬 생성 
+	// 투영 행렬 생성
 	MultipleViewportsAdapter.InitializeFromWorld(*GetActiveWorld());
 	// 화면 나눔 비율 설정 가져오기
 	MultipleViewportsAdapter.SetSplitRatio({
@@ -440,6 +444,8 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.GetEngineViewProjection(ViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraLocation(ViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraForward(ViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraNearClip(ViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraFarClip(ViewIndex),
 			RenderQueue, IconQueue, ArrowQueue);
 
 
@@ -470,6 +476,8 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.GetEngineViewProjection(PIEViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraLocation(PIEViewIndex),
 			MultipleViewportsAdapter.GetEngineCameraForward(PIEViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraNearClip(PIEViewIndex),
+			MultipleViewportsAdapter.GetEngineCameraFarClip(PIEViewIndex),
 			RenderQueue, IconQueue, ArrowQueue);
 		CopyPIEWindowToBackbuffer();
 	}
@@ -654,6 +662,34 @@ void UEditorEngine::RenderFogPass(const int32 ViewIndex, UWorld& ViewWorld, cons
 	RenderCommand::EndRenderPass(PassInfo);
 }
 
+void UEditorEngine::RenderCSMDebugPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection) {
+	if (!SettingsPanel->GetSettings().mDebugCSM || MultipleViewportsAdapter.IsOrthographic(ViewIndex))
+		return;
+
+	const FDirectionalLightSceneProxy* DirProxy{};
+	for (const FDirectionalLightSceneProxy* Proxy : ViewWorld.GetScene().DirectionalLightProxies) {
+		if (Proxy && Proxy->IsVisible() && Proxy->IsCSMEnabled() && Proxy->GetCascadeCount() > 1) {
+			DirProxy = Proxy;
+			break;
+		}
+	}
+
+	if (!DirProxy || !mCSMDebugRenderer)
+		return;
+
+	FRenderingInfo PassInfo{ ViewRenderingInfo };
+	PassInfo.ColorRenderTargets[0].Texture = GetHDRTargetForView(ViewIndex);
+	for (FRenderingDesc& Color : PassInfo.ColorRenderTargets)
+		Color.LoadOp = ERenderTargetLoadOp::Load;
+
+	PassInfo.DepthStencil.Texture = nullptr;
+	RenderCommand::BeginRenderPass(PassInfo);
+
+	mCSMDebugRenderer->OnRender(ViewRenderingInfo.DepthStencil.Texture, ViewProjection, DirProxy->GetCascadeSplits(), Renderer->GetShadowRenderer().GetShadowMapViewCount(DirProxy->GetLightComponent()), DirProxy->GetCascadeTransitionFraction());
+
+	RenderCommand::EndRenderPass(PassInfo);
+}
+
 void UEditorEngine::RenderOverlayPass(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue)
 {
 	// 실행 중인 PIE View에는 Grid·Gizmo·Outline 같은 에디터 표시를 그리지 않는다.
@@ -730,7 +766,7 @@ void UEditorEngine::RenderOverlayPass(const int32 ViewIndex, UWorld& ViewWorld, 
 		// 아이콘 먼저 그리기 (반투명)
 		Renderer->RenderQueueSorting(IconQueue, ViewProjection, ViewCameraLocation);
 		Renderer->RenderTranslucent(ViewProjection);
-		
+
 		// 화살표 그리기 (불투명)
 		Renderer->RenderQueueSorting(ArrowQueue, ViewProjection, ViewCameraLocation);
 		Renderer->RenderOpaque(ViewProjection);
@@ -949,12 +985,18 @@ void UEditorEngine::UpdateGizmoAndPicking()
 }
 
 // View 행렬로 Scene·Grid·Gizmo·텍스트·Outline을 렌더한다.
-void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
+void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const FRenderingInfo& ViewRenderingInfo, const FMatrix& ViewProjection, const FVector& ViewCameraLocation, const FVector& ViewCameraForward, const float ViewCameraNearZ, const float ViewCameraFarZ, FRenderQueue& RenderQueue, FRenderQueue& IconQueue, FRenderQueue& ArrowQueue) {
 	FScene& Scene{ ViewWorld.GetScene() };
 	FShadowRenderer& ShadowRenderer{ Renderer->GetShadowRenderer() };
 	const EViewMode ViewMode{ MultipleViewportsAdapter.GetViewMode(ViewIndex) };
 	if (ViewMode == EViewMode::Lit_Lambert || ViewMode == EViewMode::Lit_BlinnPhong) {
-		ShadowRenderer.Render(Scene);
+		FShadowCameraContext CameraContext{};
+		CameraContext.mCameraPosition = ViewCameraLocation;
+		CameraContext.mViewProjection = ViewProjection;
+		CameraContext.mNearZ = ViewCameraNearZ;
+		CameraContext.mFarZ = ViewCameraFarZ;
+
+		ShadowRenderer.Render(Scene, CameraContext);
 	} else {
 		ShadowRenderer.Reset();
 	}
@@ -969,6 +1011,9 @@ void UEditorEngine::RenderFrame(const int32 ViewIndex, UWorld& ViewWorld, const 
 	}
 	else
 	{
+		// 1. CSM Debug Pass
+		RenderCSMDebugPass(ViewIndex, ViewWorld, ViewRenderingInfo, ViewProjection);
+
 		//직교인 경우 안개 Pass를 그리지 않는다.
 		if (!MultipleViewportsAdapter.IsOrthographic(ViewIndex) && SettingsPanel->GetSettings().bExponentialHeightFog)
 			// 2. 안개 Pass

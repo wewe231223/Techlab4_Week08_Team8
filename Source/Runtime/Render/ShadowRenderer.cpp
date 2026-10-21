@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "ShadowRenderer.h"
+#include "Core/StatOverlay.h"
 
 #include "Engine/Scene.h"
 #include "Engine/RectLightSceneProxy.h"
@@ -32,7 +33,8 @@ FShadowRenderer::FShadowRenderer() {
 FShadowRenderer::~FShadowRenderer() {
 }
 
-bool FShadowRenderer::Render(FScene& Scene, int32 AtlasResolution) {
+bool FShadowRenderer::Render(FScene& Scene, const FShadowCameraContext& CameraContext, int32 AtlasResolution) {
+	mCurrentCameraContext = CameraContext;
 	GatherShadowRequests(Scene);
 	return RenderShadowAtlas(Scene, mShadowRequests, AtlasResolution);
 }
@@ -122,7 +124,7 @@ bool FShadowRenderer::IsValidShadowView(const FShadowView& View) {
 }
 
 bool FShadowRenderer::IsValidShadowRequest(const FShadowMapRequest& Request) {
-	if (!Request.mLightComponent || !Request.mSettings.mCastShadows || (Request.mViewCount != 1 && Request.mViewCount != PointShadowFaceCount)) {
+	if (!Request.mLightComponent || !Request.mSettings.mCastShadows || Request.mViewCount == 0 || Request.mViewCount > PointShadowFaceCount) {
 		return false;
 	}
 	for (uint32 FaceIndex{}; FaceIndex < Request.mViewCount; ++FaceIndex) {
@@ -390,16 +392,28 @@ void FShadowRenderer::RenderShadowPreview() {
 void FShadowRenderer::GatherShadowRequests(const FScene& Scene) {
 	mShadowRequests.Reset();
 	mShadowRequests.Reserve(Scene.DirectionalLightProxies.Num() + Scene.LocalLightProxies.Num());
+	FStatOverlay::UpdateCSMStats(FCSMDebugSnapshot{});
 	FBox CasterBounds{};
 	if (!Scene.DirectionalLightProxies.IsEmpty() && GatherShadowCasterBounds(Scene, CasterBounds)) {
 		for (FDirectionalLightSceneProxy* Proxy : Scene.DirectionalLightProxies) {
-			FShadowMapRequest Request{};
-			if (Proxy && Proxy->BuildShadowView(CasterBounds, Request.mViews[0])) {
-				Request.mSettings = Proxy->GetShadowSettings();
-				Request.mLightComponent = Proxy->GetLightComponent();
-				Request.mLightProxy = Proxy;
-				mShadowRequests.Add(Request);
+			if (!Proxy || !Proxy->IsVisible() || !Proxy->GetLightComponent()->CastsShadows()) {
+				continue;
 			}
+
+			FShadowMapRequest Request{};
+			if (Proxy->IsCSMEnabled()) {
+				if (!Proxy->BuildShadowViews(CasterBounds, Request.mViews, mCurrentCameraContext)) {
+					continue;
+				}
+				Request.mViewCount = Proxy->GetCascadeCount();
+			} else if (!Proxy->BuildShadowView(CasterBounds, Request.mViews[0])) {
+				continue;
+			}
+
+			Request.mSettings = Proxy->GetShadowSettings();
+			Request.mLightComponent = Proxy->GetLightComponent();
+			Request.mLightProxy = Proxy;
+			mShadowRequests.Add(Request);
 		}
 	}
 

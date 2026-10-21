@@ -494,13 +494,13 @@ namespace
 					}
 
 					ImGui::TableNextRow();
-					
+
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Text("Shininess");
-					
+
 					ImGui::TableSetColumnIndex(1);
 					ImGui::SetNextItemWidth(-1.0f);
-					
+
 					float TempShininess =Effective ? Effective->Shininess : 32.0f;
 					if (ImGui::DragFloat("##Shininess", &TempShininess, 0.5f, 1.0f, 256.0f))
 					{
@@ -513,7 +513,7 @@ namespace
 					}
 
 					ImGui::TableNextRow();
-					
+
 					// 4: UV Scroll Speed
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Text("UV Scroll");
@@ -712,6 +712,10 @@ namespace
 				}
 			} else if (Property.Name == "ShadowSourceRadius" && Cast<URectLightComponent>(Object)) {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.005f, 0.0f, MaxShadowSourceRadius, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+			} else if (Property.Name == "SplitLambda" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 1.0f, "%.2f");
+			} else if (Property.Name == "CascadeTransitionFraction" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 0.3f, "%.2f");
 			} else {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
 			}
@@ -723,6 +727,8 @@ namespace
 				bChanged = DrawShadowDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
 			} else if (Property.Name == "mShadowSlopeScaledDepthBiasPreset" && Cast<ULightComponent>(Object)) {
 				bChanged = DrawShadowSlopeScaledDepthBiasPreset(Label.c_str(), *static_cast<int32*>(ValuePtr));
+			} else if (Property.Name == "CascadeCount" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderInt(Label.c_str(), static_cast<int*>(ValuePtr), 2, 4);
 			} else {
 				bChanged = ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
 			}
@@ -984,7 +990,7 @@ void FDetailsPanel::OnRender()
 		UActorComponent* SelectCandidateComponent = TargetComponent;
 
 		DrawActorHeader(TargetActor, TargetComponent);
-		DrawCompoenetList(TargetActor, TargetComponent);				
+		DrawCompoenetList(TargetActor, TargetComponent);
 		ImGui::Separator();
 
 		// 액터 -> 컴포넌트 순으로, 클래스별 프로퍼티 표시
@@ -1019,9 +1025,9 @@ void FDetailsPanel::OnRender()
 				}
 
 				PendingDeleteComponent = nullptr;
-			}			
-		}		
-	}	
+			}
+		}
+	}
 	ImGui::End();
 }
 
@@ -1041,12 +1047,20 @@ void FDetailsPanel::DrawShadowMap(const ULightComponent* LightComponent) {
 		ImGui::TextDisabled(LightComponent->CastsShadows() ? "Shadow map is not allocated in the last rendered view." : "Cast Shadows is disabled.");
 		return;
 	}
-	if (ViewCount == PointShadowFaceCount) {
+	ELightType LightType = LightComponent->GetLightType();
+	if (LightType == ELightType::Point && ViewCount == PointShadowFaceCount) {
 		const char* FaceNames[PointShadowFaceCount]{ "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
 		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, static_cast<int32>(PointShadowFaceCount) - 1);
 		ImGui::Combo("Shadow Face", &mShadowPreviewFace, FaceNames, static_cast<int32>(PointShadowFaceCount));
 	}
-	const uint32 FaceIndex{ ViewCount == PointShadowFaceCount ? static_cast<uint32>(mShadowPreviewFace) : 0 };
+	if (LightType == ELightType::Directional && ViewCount > 1)
+	{
+		const char* CascadeNames[]{ "Cascade 0 (Near)", "Cascade 1", "Cascade 2", "Cascade 3", "Cascade 4", "Cascade 5" };
+		const int32 MaxCascades = static_cast<int32>(ViewCount);
+		mShadowPreviewFace = std::clamp(mShadowPreviewFace, 0, MaxCascades - 1);
+		ImGui::Combo("Shadow Face", &mShadowPreviewFace, CascadeNames, MaxCascades);
+	}
+	const uint32 FaceIndex = (ViewCount > 1) ? static_cast<uint32>(mShadowPreviewFace) : 0;
 	const FShadowMapRenderParameters* Parameters{ mShadowRenderer->GetShadowMapRenderParameters(LightComponent, FaceIndex) };
 	if (!Parameters) {
 		return;
@@ -1129,7 +1143,7 @@ void FDetailsPanel::DrawCompoenetList(AActor* SelectedActor, UActorComponent*& O
 		{
 			Flags |= ImGuiTreeNodeFlags_Selected;
 		}
-		
+
 		FString Label = ActorComp->GetName();
 		const ImVec2 RowStart = ImGui::GetCursorScreenPos();
 		const float RowWidth = ImGui::GetContentRegionAvail().x;
@@ -1150,7 +1164,7 @@ void FDetailsPanel::DrawCompoenetList(AActor* SelectedActor, UActorComponent*& O
 
 		const FString ClassName = std::format("({})", ActorComp->GetClass()->Name);
 		const float TextX = RowStart.x + RowWidth - ImGui::CalcTextSize(ClassName.c_str()).x;
-		ImGui::GetWindowDrawList()->AddText(ImVec2(TextX, RowStart.y), IM_COL32(200, 200, 200, 255), ClassName.c_str());		
+		ImGui::GetWindowDrawList()->AddText(ImVec2(TextX, RowStart.y), IM_COL32(200, 200, 200, 255), ClassName.c_str());
 
 		ImGui::PopID();
 	}
@@ -1285,7 +1299,7 @@ void FDetailsPanel::DrawSceneComponentNode(USceneComponent* Component, USceneCom
 
 void FDetailsPanel::TryReparent(USceneComponent* DroppedComponent, USceneComponent* DragComponent)
 {
-	if (DroppedComponent != nullptr 
+	if (DroppedComponent != nullptr
 		&& DroppedComponent->GetAttachParent() != DragComponent
 		&& DroppedComponent != DragComponent)
 	{
