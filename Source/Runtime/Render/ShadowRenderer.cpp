@@ -46,6 +46,7 @@ void FShadowRenderer::Reset() {
 	mShadowMapRenderParameters.Reset();
 	mShadowMapReady = false;
 	mPreviewReady = false;
+	mAtlasPreviewReady = false;
 }
 
 void FShadowRenderer::SetShadowFilterMode(EShadowFilterMode Mode) {
@@ -175,6 +176,7 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	mDepthTexture.reset();
 	mShadowMapReady = false;
 	mPreviewReady = false;
+	mAtlasPreviewReady = false;
 	mShadowMapAllocations.Reset();
 	mShadowMapRenderParameters.Reset();
 
@@ -244,6 +246,7 @@ bool FShadowRenderer::RenderShadowAtlas(FScene& Scene, const TArray<FShadowMapRe
 	if (mShadowMapReady) {
 		RenderCommand::UpdateBufferData(mShadowMapBuffer.get(), mShadowMapRenderParameters.GetData(), mShadowMapRenderParameters.Num() * sizeof(FShadowMapRenderParameters));
 		RenderShadowPreview();
+		RenderShadowAtlasPreview();
 	}
 	return mShadowMapReady;
 }
@@ -326,7 +329,18 @@ FTexture2D* FShadowRenderer::GetShadowPreviewTexture() const {
 	return mPreviewReady ? mPreviewTexture.get() : nullptr;
 }
 
-bool FShadowRenderer::InitializePreviewPass() {
+void FShadowRenderer::RequestShadowAtlasPreview(int32 PageIndex) {
+	mAtlasPreviewPage = PageIndex;
+	if (PageIndex < 0) {
+		mAtlasPreviewReady = false;
+	}
+}
+
+FTexture2D* FShadowRenderer::GetShadowAtlasPreviewTexture(uint32 PageIndex) const {
+	return mAtlasPreviewReady && mRenderedAtlasPreviewPage == PageIndex ? mAtlasPreviewTexture.get() : nullptr;
+}
+
+bool FShadowRenderer::InitializePreviewPass(TUniquePtr<FTexture2D>& Texture, uint32 Resolution) {
 	if (!mPreviewShader) {
 		mPreviewShader = FRenderResourceManager::GetShaderProgram("Resources/Shader/ShadowPreview.hlsl");
 		if (!mPreviewShader || !mPreviewShader->PixelShader) {
@@ -337,41 +351,38 @@ bool FShadowRenderer::InitializePreviewPass() {
 	if (!mPreviewCB || !mPreviewCB->GetBuffer()) {
 		mPreviewCB = RenderCommand::CreateConstantBuffer(sizeof(FShadowPreviewConstants));
 	}
-	if (!mPreviewTexture || !mPreviewTexture->GetRTV() || !mPreviewTexture->GetSRV()) {
+	if (!Texture || !Texture->GetRTV() || !Texture->GetSRV() || Texture->GetWidth() != Resolution || Texture->GetHeight() != Resolution) {
 		D3D11_TEXTURE2D_DESC Desc{};
-		Desc.Width = mPreviewResolution;
-		Desc.Height = mPreviewResolution;
+		Desc.Width = Resolution;
+		Desc.Height = Resolution;
 		Desc.MipLevels = 1;
 		Desc.ArraySize = 1;
 		Desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		Desc.SampleDesc.Count = 1;
 		Desc.Usage = D3D11_USAGE_DEFAULT;
 		Desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-		mPreviewTexture = RenderCommand::CreateTexture2D(Desc);
+		Texture = RenderCommand::CreateTexture2D(Desc);
 	}
-	return mPreviewCB && mPreviewCB->GetBuffer() && mPreviewTexture && mPreviewTexture->GetRTV() && mPreviewTexture->GetSRV();
+	return mPreviewCB && mPreviewCB->GetBuffer() && Texture && Texture->GetRTV() && Texture->GetSRV();
 }
 
-void FShadowRenderer::RenderShadowPreview() {
-	// 뷰포트가 여러 개면 프레임마다 여러 번 호출된다. 요청을 유지해 두고 마지막으로 그린 뷰의 결과를 보여 준다.
-	const FShadowMapRenderParameters* Parameters{ mPreviewLight ? GetShadowMapRenderParameters(mPreviewLight, mPreviewFace) : nullptr };
+bool FShadowRenderer::RenderPreviewTexture(FTexture2D& Texture, const FVector2& UvMin, const FVector2& UvMax, uint32 PageIndex) {
 	const TSharedPtr<FTexture2DArray> DepthTexture{ mDepthTexture.lock() };
-	if (!Parameters || !DepthTexture || !InitializePreviewPass()) {
-		return;
+	if (!DepthTexture || PageIndex >= DepthTexture->GetArraySize()) {
+		return false;
 	}
 
-	// 타일 가장자리의 반 텍셀은 이웃 타일과 섞이지 않도록 제외한다.
 	FShadowPreviewConstants Constants{};
-	Constants.mUvMin = FVector2{ Parameters->mUvScaleBias.Z + Parameters->mTexelSize.X * 0.5f, Parameters->mUvScaleBias.W + Parameters->mTexelSize.Y * 0.5f };
-	Constants.mUvMax = FVector2{ Parameters->mUvScaleBias.Z + Parameters->mUvScaleBias.X - Parameters->mTexelSize.X * 0.5f, Parameters->mUvScaleBias.W + Parameters->mUvScaleBias.Y - Parameters->mTexelSize.Y * 0.5f };
-	Constants.mSlice = Parameters->mArraySlice;
+	Constants.mUvMin = UvMin;
+	Constants.mUvMax = UvMax;
+	Constants.mSlice = PageIndex;
 
 	FRenderingInfo PassInfo{};
 	FRenderingDesc& ColorTarget{ PassInfo.ColorRenderTargets.AddDefaulted_GetRef() };
-	ColorTarget.Texture = mPreviewTexture.get();
+	ColorTarget.Texture = &Texture;
 	ColorTarget.ClearValue.ColorClearValue = { 0.0f, 0.0f, 0.0f, 1.0f };
-	PassInfo.ViewportSetting.Width = mPreviewResolution;
-	PassInfo.ViewportSetting.Height = mPreviewResolution;
+	PassInfo.ViewportSetting.Width = Texture.GetWidth();
+	PassInfo.ViewportSetting.Height = Texture.GetHeight();
 	RenderCommand::BeginRenderPass(PassInfo);
 	RenderCommand::BindShaderProgram(mPreviewShader);
 	RenderCommand::SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -385,7 +396,28 @@ void FShadowRenderer::RenderShadowPreview() {
 	// 다음 프레임에 아틀라스를 DSV로 쓸 때 SRV로 남아 있지 않도록 바로 해제한다.
 	RenderCommand::UnbindShaderResource(0, EShaderBindFlagBits::Pixel);
 	RenderCommand::EndRenderPass(PassInfo);
-	mPreviewReady = true;
+	return true;
+}
+
+void FShadowRenderer::RenderShadowPreview() {
+	const FShadowMapRenderParameters* Parameters{ mPreviewLight ? GetShadowMapRenderParameters(mPreviewLight, mPreviewFace) : nullptr };
+	if (!Parameters || !InitializePreviewPass(mPreviewTexture, mPreviewResolution)) {
+		return;
+	}
+
+	const FVector2 UvMin{ Parameters->mUvScaleBias.Z + Parameters->mTexelSize.X * 0.5f, Parameters->mUvScaleBias.W + Parameters->mTexelSize.Y * 0.5f };
+	const FVector2 UvMax{ Parameters->mUvScaleBias.Z + Parameters->mUvScaleBias.X - Parameters->mTexelSize.X * 0.5f, Parameters->mUvScaleBias.W + Parameters->mUvScaleBias.Y - Parameters->mTexelSize.Y * 0.5f };
+	mPreviewReady = RenderPreviewTexture(*mPreviewTexture, UvMin, UvMax, Parameters->mArraySlice);
+}
+
+void FShadowRenderer::RenderShadowAtlasPreview() {
+	FTexture2DArray* DepthTexture{ GetShadowDepthTexture() };
+	if (mAtlasPreviewPage < 0 || !DepthTexture || DepthTexture->GetArraySize() == 0 || !InitializePreviewPass(mAtlasPreviewTexture, mAtlasPreviewResolution)) {
+		return;
+	}
+
+	mRenderedAtlasPreviewPage = std::min(static_cast<uint32>(mAtlasPreviewPage), DepthTexture->GetArraySize() - 1);
+	mAtlasPreviewReady = RenderPreviewTexture(*mAtlasPreviewTexture, FVector2{}, FVector2{ 1.0f, 1.0f }, mRenderedAtlasPreviewPage);
 }
 
 

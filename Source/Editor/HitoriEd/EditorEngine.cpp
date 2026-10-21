@@ -28,6 +28,7 @@
 #include "Render/RenderCommand.h"
 #include "Editor/Outliner/OutlinerPanel.h"
 #include "Editor/HitoriEd/EditorFileUtils.h"
+#include "Editor/ShadowAtlas/ShadowAtlasPanel.h"
 #include "UObject/UObjectIterator.h"
 
 #include "Core/EngineLog.h"
@@ -124,6 +125,9 @@ bool UEditorEngine::Init()
 	// 필요한 Panel들 추가후 raw pointer 반환(소유권 = EditorUI)
 	DetailsPanel = EditorUI->AddEditorPanel<FDetailsPanel>();
 	DetailsPanel->SetShadowRenderer(&Renderer->GetShadowRenderer());
+	FShadowAtlasPanel* ShadowAtlasPanel{ EditorUI->AddEditorPanel<FShadowAtlasPanel>() };
+	ShadowAtlasPanel->SetShadowRenderer(&Renderer->GetShadowRenderer());
+	OutputLogPanel->SetShadowAtlasPanel(ShadowAtlasPanel);
 	EditorControlsPanel = EditorUI->AddEditorPanel<FEditorControlsPanel>();
 	ViewportsPanel = EditorUI->AddEditorPanel<FViewportsPanel>();
 	ContentDrawerPanel = EditorUI->AddEditorPanel<FContentDrawerPanel>();

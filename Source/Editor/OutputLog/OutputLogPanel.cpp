@@ -4,6 +4,7 @@
 #include "Core/StatOverlay.h"
 #include "UObject/UObjectIterator.h"
 #include "Components/DirectionalLightComponent.h"
+#include "Editor/ShadowAtlas/ShadowAtlasPanel.h"
 
 static int TextEditCallbackStub(ImGuiInputTextCallbackData* data)
 {
@@ -44,6 +45,7 @@ bool FOutputLogPanel::Init()
 	Commands.Add("CLEAR");
 	Commands.Add("STAT");
 	Commands.Add("CSM");
+	Commands.Add("SHADOW");
 
 	HistoryPos = -1;
 	InputBuf[0] = '\0';
@@ -56,6 +58,14 @@ bool FOutputLogPanel::Init()
 
 void FOutputLogPanel::Tick(float DeltaTime)
 {
+}
+
+const char* FOutputLogPanel::GetPanelName() const {
+	return "Output Log";
+}
+
+void FOutputLogPanel::SetShadowAtlasPanel(FShadowAtlasPanel* ShadowAtlasPanel) {
+	mShadowAtlasPanel = ShadowAtlasPanel;
 }
 
 void FOutputLogPanel::OnRender()
@@ -195,8 +205,19 @@ void FOutputLogPanel::ExecCommand(const FString& CommandLine)
 	}
 
 	// CSM On/Off 및 단계 조절 콘솔 명령어
-	TArray<FString> Tokens;
+	TArray<FString> Tokens{};
 	Tokenize(CommandLine, Tokens);
+	if (Tokens.Num() > 0 && EqualsIgnoreCase(Tokens[0], "shadow")) {
+		if (Tokens.Num() == 2 && EqualsIgnoreCase(Tokens[1], "atlas") && mShadowAtlasPanel) {
+			mShadowAtlasPanel->Open();
+			FLog::Log(ELogVerbosity::Info, "Shadow Atlas opened.");
+		} else {
+			FLog::Log(ELogVerbosity::Info, "Usage: Shadow Atlas");
+		}
+		ScrollToBottom = true;
+		return;
+	}
+
 	if (Tokens.Num() > 0 && EqualsIgnoreCase(Tokens[0], "csm"))
 	{
 		if (Tokens.Num() == 1)
@@ -297,6 +318,7 @@ void FOutputLogPanel::ExecCommand(const FString& CommandLine)
 			FLog::Log(ELogVerbosity::Info, "- {}", Command);
 		OnLog(ELogVerbosity::Info, "- STAT <fps|memory|profile|csm|all|none>");
 		OnLog(ELogVerbosity::Info, "- CSM <on|off> or CSM count <2|3|4>");
+		OnLog(ELogVerbosity::Info, "- SHADOW ATLAS");
 	}
 	else if (EqualsIgnoreCase(CommandLine, "HISTORY"))
 	{

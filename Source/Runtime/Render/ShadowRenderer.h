@@ -62,6 +62,8 @@ public:
 	// 에디터 미리보기. 요청한 다음 그림자 렌더부터 해당 타일을 2D 텍스처로 그린다. nullptr로 요청하면 멈춘다.
 	void RequestShadowPreview(const ULightComponent* LightComponent, uint32 FaceIndex);
 	FTexture2D* GetShadowPreviewTexture() const;
+	void RequestShadowAtlasPreview(int32 PageIndex);
+	FTexture2D* GetShadowAtlasPreviewTexture(uint32 PageIndex) const;
 
 private:
 	static bool IsValidShadowView(const FShadowView& View);
@@ -83,8 +85,10 @@ private:
 	bool InitializeShadowClear();
 	void ClearShadowTile(const FShadowAtlasTile& Tile);
 	FShadowMapRenderParameters BuildShadowMapRenderParameters(const FShadowView& View, const FLightShadowSettings& Settings, const FShadowAtlasTile& Tile) const;
-	bool InitializePreviewPass();
+	bool InitializePreviewPass(TUniquePtr<FTexture2D>& Texture, uint32 Resolution);
+	bool RenderPreviewTexture(FTexture2D& Texture, const FVector2& UvMin, const FVector2& UvMax, uint32 PageIndex);
 	void RenderShadowPreview();
+	void RenderShadowAtlasPreview();
 
 private:
 	static constexpr int32 mDefaultAtlasResolution{ 4096 };
@@ -95,6 +99,7 @@ private:
 	static constexpr int32 mMaxAtlasPageCount{ 4 };
 
 	static constexpr uint32 mPreviewResolution{ 512 };
+	static constexpr uint32 mAtlasPreviewResolution{ 1024 };
 
 	// Scene의 Atlas가 소유하는 깊이 텍스처의 비소유 참조.
 	TWeakPtr<FTexture2DArray> mDepthTexture{};
@@ -106,6 +111,10 @@ private:
 	const ULightComponent* mPreviewLight{}; // 키로만 쓰고 역참조하지 않는다
 	uint32 mPreviewFace{};
 	bool mPreviewReady{};
+	TUniquePtr<FTexture2D> mAtlasPreviewTexture{};
+	int32 mAtlasPreviewPage{ -1 };
+	uint32 mRenderedAtlasPreviewPage{};
+	bool mAtlasPreviewReady{};
 
 	TUniquePtr<FStructuredBuffer> mShadowMapBuffer{};
 	TUniquePtr<FConstantBuffer> mShadowViewCB{};
