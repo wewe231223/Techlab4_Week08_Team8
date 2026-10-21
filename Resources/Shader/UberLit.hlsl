@@ -510,6 +510,9 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
     const float3 Radiance = { Light.Color * Light.Intensity };
     FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+    if (mReceiveShadows == 0) {
+        return Result;
+    }
     int ShadowIndex = { Light.mShadowIndex };
     const float TransitionFraction = { Light.mCascadeTransitionFraction };
     float NearSplit = { 0.0f };
@@ -640,6 +643,9 @@ FLightContribution CalcLocalLight(FLightRenderParameters Light, float3 N, float3
     else
         Result = CalcPointLight(Light, N, V, WorldPos, InShininess);
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
+    if (mReceiveShadows == 0) {
+        return Result;
+    }
     const float Visibility = { Light.Type == LIGHT_TYPE_POINT ? CastPointShadow(Light, WorldPos, N, DiskRotation) : (Light.Type == LIGHT_TYPE_SPOT || Light.Type == LIGHT_TYPE_RECT) ? CastShadow(Light.mShadowIndex, WorldPos, N, DiskRotation) : 1.0f };
     Result.Diffuse *= Visibility;
     Result.Specular *= Visibility;

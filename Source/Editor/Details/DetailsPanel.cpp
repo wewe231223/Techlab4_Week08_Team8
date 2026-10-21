@@ -668,7 +668,9 @@ namespace
 		const FString Label = "##" + Property.Name;
 
 		const char* DisplayName = Property.Name.c_str();
-		if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
+		if (Property.Name == "mReceiveShadows" && Cast<UPrimitiveComponent>(Object)) {
+			DisplayName = "ReceiveShadow";
+		} else if (Property.Name == "MinCasterDepth" && Cast<ULightComponent>(Object)) {
 			DisplayName = "Min Caster Depth";
 		} else if (Property.Name == "SourceAngle" && Cast<UDirectionalLightComponent>(Object)) {
 			DisplayName = "Source Angle (deg)";

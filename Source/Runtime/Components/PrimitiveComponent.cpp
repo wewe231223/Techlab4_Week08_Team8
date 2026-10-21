@@ -60,8 +60,12 @@ bool UPrimitiveComponent::CastsShadows() const {
 	return mCastShadows;
 }
 
-bool UPrimitiveComponent::ReceivesShadows() const {
+bool UPrimitiveComponent::GetReceiveShadow() const {
 	return mReceiveShadows;
+}
+
+bool UPrimitiveComponent::ReceivesShadows() const {
+	return GetReceiveShadow();
 }
 
 void UPrimitiveComponent::SetCastShadows(bool CastShadows) {
@@ -72,12 +76,16 @@ void UPrimitiveComponent::SetCastShadows(bool CastShadows) {
 	MarkRenderStateDirty();
 }
 
-void UPrimitiveComponent::SetReceiveShadows(bool ReceiveShadows) {
-	if (mReceiveShadows == ReceiveShadows) {
+void UPrimitiveComponent::SetReceiveShadow(bool ReceiveShadow) {
+	if (mReceiveShadows == ReceiveShadow) {
 		return;
 	}
-	mReceiveShadows = ReceiveShadows;
+	mReceiveShadows = ReceiveShadow;
 	MarkRenderStateDirty();
+}
+
+void UPrimitiveComponent::SetReceiveShadows(bool ReceiveShadows) {
+	SetReceiveShadow(ReceiveShadows);
 }
 
 

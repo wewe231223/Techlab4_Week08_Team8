@@ -62,8 +62,10 @@ public:
 		MarkRenderStateDirty();
 	}
 	bool CastsShadows() const;
+	bool GetReceiveShadow() const;
 	bool ReceivesShadows() const;
 	void SetCastShadows(bool CastShadows);
+	void SetReceiveShadow(bool ReceiveShadow);
 	void SetReceiveShadows(bool ReceiveShadows);
 
 	virtual bool LineTraceComponent(const FRay& WorldRay, FHitResult& OutHit);

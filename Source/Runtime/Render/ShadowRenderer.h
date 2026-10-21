@@ -2,6 +2,7 @@
 
 #include "Containers/Array.h"
 #include "Containers/Map.h"
+#include "Math/Frustum.h"
 #include "RenderPacket.h"
 #include "ShadowAtlas.h"
 #include "ShadowView.h"
@@ -21,6 +22,7 @@ class FPrimitiveSceneProxy;
 class ULightComponent;
 struct FBox;
 struct FRenderingInfo;
+struct FLightRenderParameters;
 
 class FShadowRenderer {
 private:
@@ -72,6 +74,8 @@ private:
 	static int32 NormalizeAtlasResolution(int32 Resolution);
 	static TArray<FShadowAtlasAllocation> BuildShadowAtlasAllocations(FShadowAtlas& Atlas, const TArray<FShadowMapRequest>& Requests, uint32 AtlasResolution);
 	static bool GatherShadowCasterBounds(const FScene& Scene, FBox& OutBounds);
+	static TArray<FAABB> GatherVisibleReceiverBounds(const FScene& Scene, const FFrustumPlanes& CameraFrustum);
+	static bool IsShadowRequestVisible(const FShadowMapRequest& Request, const FFrustumPlanes& CameraFrustum, const TArray<FAABB>& ReceiverBounds, const FLightRenderParameters* LightParameters);
 	bool InitializeShadowPass();
 	bool SetShadowRasterizerState(EShadowDepthBiasPreset DepthBiasPreset, EShadowSlopeScaledDepthBiasPreset SlopeScaledDepthBiasPreset, bool CullBackFaces);
 	void GatherShadowRequests(const FScene& Scene);

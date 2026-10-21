@@ -42,6 +42,7 @@ struct FShadowMapRequest {
 	const ULightComponent* mLightComponent{};
 	// 맵별 Caster 목록과 재사용 조건 평가를 담당하는 비소유 프록시.
 	FLightSceneProxy* mLightProxy{};
+	bool mNeedsRendering{ true };
 };
 
 struct FShadowCameraContext {
