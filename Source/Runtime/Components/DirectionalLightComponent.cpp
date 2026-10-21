@@ -32,4 +32,8 @@ void UDirectionalLightComponent::PostEditChangeProperty(const FProperty& Propert
     {
         MaxShadowDistance = std::max(MaxShadowDistance, 50.0f);
     }
+    else if (Property.Name == "CascadeTransitionFraction")
+    {
+        CascadeTransitionFraction = std::clamp(CascadeTransitionFraction, 0.0f, 0.3f);
+    }
 }

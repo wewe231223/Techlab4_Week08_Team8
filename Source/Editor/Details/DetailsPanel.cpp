@@ -689,6 +689,8 @@ namespace
 		case EPropertyType::Float:
 			if (Property.Name == "SplitLambda" && Cast<UDirectionalLightComponent>(Object)) {
 				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 1.0f, "%.2f");
+			} else if (Property.Name == "CascadeTransitionFraction" && Cast<UDirectionalLightComponent>(Object)) {
+				bChanged = ImGui::SliderFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.0f, 0.3f, "%.2f");
 			} else {
 				bChanged = ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
 			}

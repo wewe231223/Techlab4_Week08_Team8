@@ -432,6 +432,9 @@ void UEditorEngine::RenderMultipleViewports()
 			MultipleViewportsAdapter.BuildRenderQueue(ViewIndex, RenderQueue, IconQueue, ArrowQueue);
 		}
 
+		const bool bViewOrtho = MultipleViewportsAdapter.IsOrthographic(ViewIndex);
+		Renderer->SetDebugCSM(SettingsPanel->GetSettings().bDebugCSM && !bViewOrtho);
+
 		RenderFrame(
 			ViewIndex,
 			*ViewWorld,
@@ -463,6 +466,9 @@ void UEditorEngine::RenderMultipleViewports()
 			SCOPE_CYCLE_COUNTER(STAT_BuildRenderQueue);
 			MultipleViewportsAdapter.BuildRenderQueue(PIEViewIndex, RenderQueue, IconQueue, ArrowQueue);
 		}
+
+		const bool bPIEOrtho = MultipleViewportsAdapter.IsOrthographic(PIEViewIndex);
+		Renderer->SetDebugCSM(SettingsPanel->GetSettings().bDebugCSM && !bPIEOrtho);
 
 		RenderFrame(
 			PIEViewIndex,

@@ -43,6 +43,11 @@ public:
 	{
 		return CascadeSplits;
 	}
+	float GetCascadeTransitionFraction() const
+	{
+		auto* Dir = static_cast<const UDirectionalLightComponent*>(LightComponent);
+		return Dir ? Dir->GetCascadeTransitionFraction() : 0.0f;
+	}
 private:
 	mutable FVector4 CascadeSplits{};
 };

@@ -44,7 +44,8 @@ struct FDirectionalLightInfo
     int mShadowIndex; // 방향광의 그림자 데이터 항목 인덱스. -1은 그림자 맵 미할당이다.
     uint CascadeCount;
     float4 CascadeSplits;
-    float3 Padding;
+    float CascadeTransitionFraction;
+    float2 Padding;
 };
 
 // SceneManagement.h의 FLightRenderParameters와 바이트 단위로 같아야 한다.
@@ -306,9 +307,8 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
     FLightContribution Result = { SurfaceShading(N, -Light.Direction, V, Radiance, InShininess) };
 #if defined(LIGHTING_MODEL_LAMBERT) || defined(LIGHTING_MODEL_BLINN_PHONG)
     int ShadowIndex = -1;
-    // 추후 TransitionFraction DirectionalLightComponent의 멤버 변수로 UI에서 변경할 수 있게 한다 
-    float TransitionFraction = 0.3f;
-    float BlendRatio;
+    float TransitionFraction = Light.CascadeTransitionFraction;
+    float BlendRatio = 0.0f;
     float NearSplit = 0.0f;
     float FarSplit = 0.0f;
     int CascadeIndex = -1;
@@ -334,7 +334,7 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
     }
     float Visibility = { CastShadow(ShadowIndex, WorldPos, N) };
 
-    if (CascadeIndex >= 0 && CascadeIndex != Light.CascadeCount - 1)
+    if (CascadeIndex >= 0 && CascadeIndex < (int) Light.CascadeCount - 1 && TransitionFraction > 0.0f)
     {
         float CascadeRange = FarSplit - NearSplit;
         float DistToSplit = FarSplit - ViewDepth;
@@ -343,8 +343,8 @@ FLightContribution CalcDirectionalLight(FDirectionalLightInfo Light, float3 N, f
         if (DistToSplit < BlendRange && BlendRange > 0.0f)
         {
             BlendRatio = 1.0f - (DistToSplit / BlendRange);
-            float LerpVisibility = CastShadow(ShadowIndex + 1, WorldPos, N);
-            Visibility = lerp(Visibility, LerpVisibility, BlendRatio);
+            float NextVisibility = CastShadow(ShadowIndex + 1, WorldPos, N);
+            Visibility = lerp(Visibility, NextVisibility, BlendRatio);
         }
     }
 
@@ -547,6 +547,11 @@ VS_OUTPUT mainVS(VS_INPUT Input)
 
 float3 GetCSMCascadeColor(float3 WorldPos)
 {
+    if (bOrthographic != 0)
+    {
+        return float3(1.0f, 1.0f, 1.0f);
+    }
+
     static const float3 CascadeColors[4] =
     {
         float3(1.0f, 0.25f, 0.25f), // Cascade 0: Red
@@ -561,12 +566,38 @@ float3 GetCSMCascadeColor(float3 WorldPos)
         const FDirectionalLightInfo Light = DirectionalLights[LightIndex];
         if (Light.CascadeCount > 1 && Light.mShadowIndex >= 0)
         {
+            int CascadeIdx = -1;
+            float NearSplit = 0.0f;
+            float FarSplit = 0.0f;
+
             for (uint i = 0; i < Light.CascadeCount; ++i)
             {
                 if (ViewDepth < Light.CascadeSplits[i])
                 {
-                    return CascadeColors[min(i, 3u)];
+                    CascadeIdx = (int) i;
+                    FarSplit = Light.CascadeSplits[i];
+                    break;
                 }
+                NearSplit = Light.CascadeSplits[i];
+            }
+
+            if (CascadeIdx >= 0)
+            {
+                float3 Color = CascadeColors[min((uint) CascadeIdx, 3u)];
+                if (CascadeIdx < (int) Light.CascadeCount - 1 && Light.CascadeTransitionFraction > 0.0f)
+                {
+                    float CascadeRange = FarSplit - NearSplit;
+                    float DistToSplit = FarSplit - ViewDepth;
+                    float BlendRange = CascadeRange * Light.CascadeTransitionFraction;
+
+                    if (DistToSplit < BlendRange && BlendRange > 0.0f)
+                    {
+                        float BlendRatio = 1.0f - (DistToSplit / BlendRange);
+                        float3 NextColor = CascadeColors[min((uint) (CascadeIdx + 1), 3u)];
+                        Color = lerp(Color, NextColor, BlendRatio);
+                    }
+                }
+                return Color;
             }
         }
     }
@@ -628,7 +659,7 @@ float4 mainPS(VS_OUTPUT Input) : SV_TARGET
 
     float3 FinalColor = Albedo.rgb * DiffuseLighting + SpecularLighting;
 #if !defined(EDITOR_ARROW_SHADER)
-    if (bDebugCSM != 0 && mReceiveShadows != 0)
+    if (bDebugCSM != 0 && bOrthographic == 0 && mReceiveShadows != 0)
     {
         FinalColor *= GetCSMCascadeColor(Input.WorldPos);
     }

@@ -44,7 +44,20 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
 	ImGui::Checkbox("FXAA", &Settings.bEnableFXAA);
 	ImGui::Checkbox("Shadow PCF", &Settings.mEnableShadowPcf);
+	const bool bIsOrtho = ViewportAdapter && ViewportAdapter->IsOrthographic(ViewportAdapter->GetEditorViewIndex());
+	if (bIsOrtho)
+	{
+		ImGui::BeginDisabled(true);
+	}
 	ImGui::Checkbox("CSM Debug", &Settings.bDebugCSM);
+	if (bIsOrtho)
+	{
+		ImGui::EndDisabled();
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		{
+			ImGui::SetTooltip("CSM Debug is disabled in Orthographic view.");
+		}
+	}
 	ImGui::SliderFloat("Exposure", &Settings.Exposure, 0.1f, 5.0f, "%.2f");
 	ImGui::Checkbox("Depth View", &Settings.bDepthView);
 	ImGui::Checkbox("Exponential Height Fog", &Settings.bExponentialHeightFog);

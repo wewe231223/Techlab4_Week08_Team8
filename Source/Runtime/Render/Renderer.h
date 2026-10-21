@@ -65,7 +65,8 @@ struct FDirectionalLightInfo
 	int32 mShadowIndex{ InvalidShadowMapIndex }; // 방향광이 참조할 FShadowMapRenderParameters 항목의 인덱스. 미할당은 -1이다.
 	uint32 CascadeCount;
 	FVector4 CascadeSplits;
-	float Padding[3];
+	float CascadeTransitionFraction;
+	float Padding[2];
 };
 
 struct FPointLightInfo

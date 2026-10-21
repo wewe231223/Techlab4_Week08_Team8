@@ -185,6 +185,7 @@ void FScene::UpdateLights(FRenderer* Renderer)
 			// CSM 활성화 되어 있을 시 CascadeCount 가져온다
 			Proxy->IsCSMEnabled() ? Proxy->GetCascadeCount() : 1,
 			Proxy->GetCascadeSplits(),
+			Proxy->IsCSMEnabled() ? Proxy->GetCascadeTransitionFraction() : 0.0f,
 			});
 	}
 
